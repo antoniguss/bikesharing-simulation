@@ -22,7 +22,24 @@ class BikeShareSystem:
             "total_cycling_distance": 0.0, "total_trip_time": 0
         }
         self.trip_log = []
+        self.active_users = {}
         print("--- System Initialized Successfully ---")
+    
+    def _add_active_user(self, user_id, start_coord, end_coord, start_time, end_time, mode):
+        """Adds or updates a user's state for live tracking."""
+        if end_time > start_time: # Avoid division by zero for instant trips
+            self.active_users[user_id] = {
+                "start_coord": start_coord,
+                "end_coord": end_coord,
+                "start_time": start_time,
+                "end_time": end_time,
+                "mode": mode
+            }
+
+    def _remove_active_user(self, user_id):
+        """Removes a user from tracking once they complete a leg of their journey."""
+        if user_id in self.active_users:
+            del self.active_users[user_id]
 
     def _create_stations_from_geojson(self) -> List[Station]:
         """

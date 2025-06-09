@@ -21,20 +21,32 @@ def user_journey(env, system: BikeShareSystem, user: User):
         system.stats["failed_trips"] += 1
         return
 
+    # 1. Walk to origin station
+    start_time = env.now
+    system._add_active_user(user.id, user.origin, (origin_station.x, origin_station.y), start_time, start_time+walk_to_time, "walking")
     yield env.timeout(walk_to_time)
+    system._remove_active_user(user.id)
+
     if not origin_station.has_bike():
         system.stats["failed_trips"] += 1
         return
     origin_station.take_bike()
 
+    # 2. Cycle to destination station
+    start_time = env.now
+    system._add_active_user(user.id, (origin_station.x, origin_station.y), (dest_station.x, dest_station.y), start_time, start_time + cycle_time, "cycling")
     yield env.timeout(cycle_time)
-    if not dest_station.has_space():
-        system.stats["failed_trips"] += 1
-        origin_station.return_bike()
-        return
+    system._remove_active_user(user.id)
+
+    if not dest_station.has_space(): # Check space availability after cycling
+        system.stats["failed_trips"] += 1; origin_station.return_bike(); return
     dest_station.return_bike()
 
+    # 3. Walk to final destination
+    start_time = env.now
+    system._add_active_user(user.id, (dest_station.x, dest_station.y), user.destination, start_time, start_time + walk_from_time, "walking")
     yield env.timeout(walk_from_time)
+    system._remove_active_user(user.id)
     
     total_time = walk_to_time + cycle_time + walk_from_time
     system.stats["successful_trips"] += 1
