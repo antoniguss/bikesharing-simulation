@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+    
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    
+        <script>
+            L_NO_TOUCH = false;
+            L_DISABLE_3D = false;
+        </script>
+    
+    <style>html, body {width: 100%;height: 100%;margin: 0;padding: 0;}</style>
+    <style>#map {position:absolute;top:0;bottom:0;right:0;left:0;}</style>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap-glyphicons.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.0/css/all.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css"/>
+    
+            <meta name="viewport" content="width=device-width,
+                initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            <style>
+                #map_c5cf93d6288f14d319685420761062ec {
+                    position: relative;
+                    width: 50.0%;
+                    height: 100.0%;
+                    left: 0.0%;
+                    top: 0.0%;
+                }
+                .leaflet-container { font-size: 1rem; }
+            </style>
+        
+</head>
+<body>
+    
+    
+            <div class="folium-map" id="map_c5cf93d6288f14d319685420761062ec" ></div>
+        
+</body>
+<script>
+    
+    
+            var map_c5cf93d6288f14d319685420761062ec = L.map(
+                "map_c5cf93d6288f14d319685420761062ec",
+                {
+                    center: [51.43645000000001, 5.480975],
+                    crs: L.CRS.EPSG3857,
+                    ...{
+  "zoom": 13,
+  "zoomControl": true,
+  "preferCanvas": false,
+  "length": "50%",
+}
+
+                }
+            );
+
+            
+
+        
+    
+            var tile_layer_a968aa88a0666586e07be98bdfe0e995 = L.tileLayer(
+                "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                {
+  "minZoom": 0,
+  "maxZoom": 19,
+  "maxNativeZoom": 19,
+  "noWrap": false,
+  "attribution": "\u0026copy; \u003ca href=\"https://www.openstreetmap.org/copyright\"\u003eOpenStreetMap\u003c/a\u003e contributors",
+  "subdomains": "abc",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            tile_layer_a968aa88a0666586e07be98bdfe0e995.addTo(map_c5cf93d6288f14d319685420761062ec);
+        
+    
+            var marker_bdb9b7b741398d1400757cea5f6c17f0 = L.marker(
+                [51.4408, 5.4789],
+                {
+}
+            ).addTo(map_c5cf93d6288f14d319685420761062ec);
+        
+    
+            var icon_fb8ec6898373167106115068fdcbfea3 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "blue",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_92292a1081ea43ddf508846b22b19eb3 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_e0287baafbdcf5c5775c90868bc7688c = $(`<div id="html_e0287baafbdcf5c5775c90868bc7688c" style="width: 100.0%; height: 100.0%;">Station A</div>`)[0];
+                popup_92292a1081ea43ddf508846b22b19eb3.setContent(html_e0287baafbdcf5c5775c90868bc7688c);
+            
+        
+
+        marker_bdb9b7b741398d1400757cea5f6c17f0.bindPopup(popup_92292a1081ea43ddf508846b22b19eb3)
+        ;
+
+        
+    
+    
+                marker_bdb9b7b741398d1400757cea5f6c17f0.setIcon(icon_fb8ec6898373167106115068fdcbfea3);
+            
+    
+            var marker_037f643e9d5ccaaa5112fe0eb5985ab4 = L.marker(
+                [51.42, 5.5],
+                {
+}
+            ).addTo(map_c5cf93d6288f14d319685420761062ec);
+        
+    
+            var icon_0e0cf7da6b94e07cefc5812a66d3b9e3 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "blue",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_a8f4ff14210b3c298d407023c4f766d1 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_11aca06c814e324b32b25f08f84aa23d = $(`<div id="html_11aca06c814e324b32b25f08f84aa23d" style="width: 100.0%; height: 100.0%;">Station D</div>`)[0];
+                popup_a8f4ff14210b3c298d407023c4f766d1.setContent(html_11aca06c814e324b32b25f08f84aa23d);
+            
+        
+
+        marker_037f643e9d5ccaaa5112fe0eb5985ab4.bindPopup(popup_a8f4ff14210b3c298d407023c4f766d1)
+        ;
+
+        
+    
+    
+                marker_037f643e9d5ccaaa5112fe0eb5985ab4.setIcon(icon_0e0cf7da6b94e07cefc5812a66d3b9e3);
+            
+    
+            var poly_line_b0b6e28cb47cedfbc0323b29f3fc20be = L.polyline(
+                [[51.4408, 5.4789], [51.42, 5.5]],
+                {"bubblingMouseEvents": true, "color": "blue", "dashArray": null, "dashOffset": null, "fill": false, "fillColor": "blue", "fillOpacity": 0.2, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "noClip": false, "opacity": 0.6, "smoothFactor": 1.0, "stroke": true, "weight": 5}
+            ).addTo(map_c5cf93d6288f14d319685420761062ec);
+        
+    
+            poly_line_b0b6e28cb47cedfbc0323b29f3fc20be.bindTooltip(
+                `<div>
+                     Distance: 3.29 km, Duration: 11.97 minutes
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+</script>
+</html>
