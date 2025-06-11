@@ -3,19 +3,18 @@
 
 import random
 import openrouteservice
-import osmnx as ox
 import geopandas as gpd
 from typing import List, Tuple, Optional, Dict
 
 from data_models import Station, User
 from utils import POIDatabase, haversine_distance
-from config import POI_DATABASE_PATH, NEIGHBOURHOODS_TO_USE, NEIGHBOURHOOD_GEOJSON_PATH, CITY_QUERY
+from config import POI_DATABASE_PATH, STATION_GEOJSON_PATH
 
 class BikeShareSystem:
     def __init__(self, ors_api_key: str):
         print("--- Initializing Bike Share System ---")
         self.poi_db = POIDatabase(POI_DATABASE_PATH)
-        self.stations = self._create_stations_from_geojson()
+        self.stations = self._create_stations_from_file()
         self.station_routes = self._precompute_station_routes(ors_api_key)
         self.stats = {
             "successful_trips": 0, "failed_trips": 0, "total_walking_distance": 0.0,
@@ -24,46 +23,43 @@ class BikeShareSystem:
         self.trip_log = []
         print("--- System Initialized Successfully ---")
 
-    def _create_stations_from_geojson(self) -> List[Station]:
+    def _create_stations_from_file(self) -> List[Station]:
         """
-        Creates one station for each neighborhood defined in config.py,
-        using the local geojson file as the source for geometries.
+        Creates stations from a predefined GeoJSON file, ensuring only
+        Point geometries are processed.
         """
-        print(f"Creating stations from '{NEIGHBOURHOOD_GEOJSON_PATH}'...")
+        print(f"Loading stations from file: '{STATION_GEOJSON_PATH}'...")
         
         try:
-            buurten_gdf = gpd.read_file(NEIGHBOURHOOD_GEOJSON_PATH)
+            all_features_gdf = gpd.read_file(STATION_GEOJSON_PATH)
         except Exception as e:
-            raise SystemExit(f"Could not read geojson file: {e}")
+            raise SystemExit(f"Could not read station geojson file: {e}")
 
-        target_gdf = buurten_gdf[buurten_gdf['buurtnaam'].isin(NEIGHBOURHOODS_TO_USE)].copy()
+        # --- THIS IS THE FIX ---
+        # Filter for only Point geometries, ignoring any Polygons in the file.
+        stations_gdf = all_features_gdf[all_features_gdf.geom_type == 'Point'].copy()
         
-        if target_gdf.empty:
-            raise SystemExit("Error: Could not find any of the specified neighborhoods in the geojson file. Check names in config.py.")
-            
-        print(f"Found {len(target_gdf)} of the {len(NEIGHBOURHOODS_TO_USE)} specified neighborhoods.")
-
-        print("Fetching street network graph to place stations on roads...")
-        graph = ox.graph_from_place(CITY_QUERY, network_type='bike')
+        print(f"Found {len(stations_gdf)} Point features to use as stations.")
 
         stations = []
-        for index, row in target_gdf.iterrows():
-            neighborhood_name = row['buurtnaam']
-            centroid = row['geometry'].centroid
+        for index, row in stations_gdf.iterrows():
+            # Extract coordinates from the point geometry
+            lon, lat = row.geometry.x, row.geometry.y
             
-            nearest_node_id = ox.nearest_nodes(graph, X=centroid.x, Y=centroid.y)
-            node_data = graph.nodes[nearest_node_id]
-            lon, lat = node_data['x'], node_data['y']
-            
+            # Use the 'name' property from the file (e.g., "A1", "C")
+            station_name = row.get('name', f"Station_{index}")
+
             station = Station(
                 id=len(stations),
                 x=lon, y=lat,
-                capacity=random.randint(15, 25),
-                bikes=random.randint(8, 15),
-                neighbourhood=neighborhood_name
+                capacity=20, # Default capacity
+                bikes=10,    # Default number of bikes
+                neighbourhood=station_name # Using the feature's name as an identifier
             )
             stations.append(station)
-            print(f"  -> Created Station {station.id} for '{neighborhood_name}'")
+        
+        if not stations:
+            raise SystemExit("Error: Station file was read, but no Point features were found. Check file content.")
             
         return stations
 
@@ -77,11 +73,13 @@ class BikeShareSystem:
             )
         except openrouteservice.exceptions.ApiError as e:
             raise SystemExit(f"ORS API Error: {e}. Cannot precompute routes. Check API key.")
+        
         routes = {}
         durations_min = [[s / 60.0 for s in row] for row in matrix['durations']]
         distances_km = [[m / 1000.0 for m in row] for row in matrix['distances']]
         for i, origin in enumerate(self.stations):
             for j, dest in enumerate(self.stations):
+                if i == j: continue
                 routes[(origin.id, dest.id)] = {
                     'duration': durations_min[i][j], 'distance': distances_km[i][j]
                 }
@@ -94,7 +92,8 @@ class BikeShareSystem:
 
     def get_cycling_info(self, origin_id: int, dest_id: int) -> Tuple[float, float]:
         if origin_id == dest_id: return 0.0, 0.0
-        route = self.station_routes[(origin_id, dest_id)]
+        route = self.station_routes.get((origin_id, dest_id))
+        if route is None: return 0.0, 0.0
         return route['distance'], route['duration']
 
     def find_nearest_station_with_bike(self, loc: tuple) -> Optional[Station]:
@@ -108,9 +107,7 @@ class BikeShareSystem:
     def generate_user(self) -> User:
         origin_poi, origin_type, origin_hood, _ = self.poi_db.get_random_poi()
         dest_poi, dest_type, dest_hood, _ = self.poi_db.get_random_poi()
-        # Ensure user generation doesn't fail if one of the POI lookups returns None
         if not all([origin_poi, dest_poi]):
-             # Simple retry mechanism
              print("Retrying user generation due to missing POI data...")
              return self.generate_user()
 

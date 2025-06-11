@@ -12,14 +12,13 @@ USER_ARRIVAL_RATE = 0.2    # Average number of users arriving per minute
 # --- Data Paths ---
 POI_DATABASE_PATH = './data/poi_database.json'
 NEIGHBOURHOOD_GEOJSON_PATH = './data/buurten.geojson'
-
+STATION_GEOJSON_PATH = './data/ev_our_stations.geojson'
 # --- Geographic Configuration ---
 # City query for OSMnx to fetch the correct street network
 CITY_QUERY = "Eindhoven, Netherlands"
 
-# This list is the single source of truth for which neighborhoods to use
-# for both station placement and POI generation.
-# Names must exactly match the 'buurtnaam' field in the geojson file.
+# This list controls which neighborhoods POIs are generated in.
+# It no longer controls station placement.
 NEIGHBOURHOODS_TO_USE = [
     # Group 'Acht'
     'Achtse Barrier-Hoeven',
