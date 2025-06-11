@@ -10,31 +10,36 @@ def user_journey(env, system: BikeShareSystem, user: User):
     dest_station = system.find_nearest_station_with_space(user.destination)
     
     if not origin_station or not dest_station:
-        system.stats["failed_trips"] += 1
-        return
-
+        system.stats["failed_trips"] += 1; return
+        
     walk_to_dist, walk_to_time = system.get_walking_info(user.origin, (origin_station.x, origin_station.y))
     walk_from_dist, walk_from_time = system.get_walking_info((dest_station.x, dest_station.y), user.destination)
     cycle_dist, cycle_time = system.get_cycling_info(origin_station.id, dest_station.id)
     
     if (walk_to_dist + walk_from_dist) > 10.0:
-        system.stats["failed_trips"] += 1
-        return
+        system.stats["failed_trips"] += 1; return
 
+    # --- UPDATED with tracking calls ---
+    start_time = env.now
+    system._add_active_user(user.id, user.origin, (origin_station.x, origin_station.y), start_time, start_time + walk_to_time, "walking")
     yield env.timeout(walk_to_time)
-    if not origin_station.has_bike():
-        system.stats["failed_trips"] += 1
-        return
+    system._remove_active_user(user.id)
+
+    if not origin_station.has_bike(): system.stats["failed_trips"] += 1; return
     origin_station.take_bike()
 
+    start_time = env.now
+    system._add_active_user(user.id, (origin_station.x, origin_station.y), (dest_station.x, dest_station.y), start_time, start_time + cycle_time, "cycling")
     yield env.timeout(cycle_time)
-    if not dest_station.has_space():
-        system.stats["failed_trips"] += 1
-        origin_station.return_bike()
-        return
+    system._remove_active_user(user.id)
+
+    if not dest_station.has_space(): system.stats["failed_trips"] += 1; origin_station.return_bike(); return
     dest_station.return_bike()
 
+    start_time = env.now
+    system._add_active_user(user.id, (dest_station.x, dest_station.y), user.destination, start_time, start_time + walk_from_time, "walking")
     yield env.timeout(walk_from_time)
+    system._remove_active_user(user.id)
     
     total_time = walk_to_time + cycle_time + walk_from_time
     system.stats["successful_trips"] += 1
