@@ -56,7 +56,7 @@ def create_poi_distribution_map(system: BikeShareSystem):
     # Add the layer control to toggle layers on and off
     folium.LayerControl().add_to(m)
     
-    map_filename = 'poi_distribution_map.html'
+    map_filename = './generated/poi_distribution_map.html'
     m.save(map_filename)
     print(f"POI distribution map saved to '{map_filename}'")
 
@@ -99,8 +99,8 @@ def create_results_visualization(system: BikeShareSystem):
 
     cx.add_basemap(ax, source=cx.providers.CartoDB.Positron)
     ax.set_axis_off()
-    plt.savefig('simulation_results_heatmap.png', dpi=300, bbox_inches='tight')
-    print("Results heatmap visualization saved to 'simulation_results_heatmap.png'")
+    plt.savefig('./generated/simulation_results_heatmap.png', dpi=300, bbox_inches='tight')
+    print("Results heatmap visualization saved to './generated/simulation_results_heatmap.png'")
 
 
 def run_simulation():
