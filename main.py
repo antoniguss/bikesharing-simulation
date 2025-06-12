@@ -1,66 +1,119 @@
 # main.py
-# Description: Main entry point to run the bike-sharing simulation.
+# Description: Main entry point to run the bike-sharing simulation and visualization.
 
 import simpy
 import folium
-from config import ORS_API_KEY, SIMULATION_TIME, USER_ARRIVAL_RATE
+import geopandas as gpd
+import matplotlib.pyplot as plt
+import contextily as cx
+from shapely.geometry import Point
+from config import SIMULATION_TIME, USER_ARRIVAL_RATE
 from simulation_system import BikeShareSystem
 from simulation_processes import user_generator
 
-def create_trip_map(stations, trip_log):
-    """Generates a folium map visualizing all trips."""
+def create_poi_distribution_map(system: BikeShareSystem):
+    """
+    Generates a single Folium map with toggleable layers to show the
+    distribution of each type of POI (houses, shops, education).
+    """
+    print("Generating POI distribution map...")
+
+    # Find a central point for the map
+    poi_data = system.poi_db.poi_data
+    all_lats = [poi['lat'] for poi_type in poi_data.values() for poi in poi_type]
+    all_lons = [poi['lon'] for poi_type in poi_data.values() for poi in poi_type]
     
-    # Calculate map center
-    avg_lat = sum(s.y for s in stations) / len(stations)
-    avg_lon = sum(s.x for s in stations) / len(stations)
+    if not all_lats:
+        print("No POI data to visualize.")
+        return
+
+    map_center = [sum(all_lats) / len(all_lats), sum(all_lons) / len(all_lons)]
+    m = folium.Map(location=map_center, zoom_start=13)
+
+    # Define colors for each POI type
+    colors = {
+        'houses': 'blue',
+        'shops': 'red',
+        'education': 'green'
+    }
+
+    # Create a feature group for each POI type
+    for poi_type, poi_list in poi_data.items():
+        feature_group = folium.FeatureGroup(name=poi_type.capitalize())
+        
+        for poi in poi_list:
+            folium.CircleMarker(
+                location=[poi['lat'], poi['lon']],
+                radius=3,
+                color=colors.get(poi_type, 'gray'),
+                fill=True,
+                fill_color=colors.get(poi_type, 'gray'),
+                fill_opacity=0.7
+            ).add_to(feature_group)
+        
+        feature_group.add_to(m)
+
+    # Add the layer control to toggle layers on and off
+    folium.LayerControl().add_to(m)
     
-    # Create base map
-    m = folium.Map(location=[avg_lat, avg_lon], zoom_start=14)
+    map_filename = 'poi_distribution_map.html'
+    m.save(map_filename)
+    print(f"POI distribution map saved to '{map_filename}'")
 
-    # 1. Add station markers
-    for s in stations:
-        folium.Marker(
-            location=[s.y, s.x],
-            popup=f"Station {s.id}<br>Hood: {s.neighbourhood}<br>Capacity: {s.capacity}",
-            icon=folium.Icon(color='darkblue', icon='bicycle', prefix='fa')
-        ).add_to(m)
 
-    # 2. Add trip lines
-    for trip in trip_log:
-        # Walking to station (dashed blue line)
-        folium.PolyLine(
-            locations=[trip['user_origin'], trip['origin_station']],
-            color='blue', weight=2.5, opacity=0.8, dash_array='5, 5'
-        ).add_to(m)
-        
-        # Cycling between stations (solid red line)
-        folium.PolyLine(
-            locations=[trip['origin_station'], trip['dest_station']],
-            color='red', weight=4, opacity=0.7
-        ).add_to(m)
+def create_results_visualization(system: BikeShareSystem):
+    """
+    Generates and saves a heatmap-style visualization of simulation results.
+    """
+    print("Generating results visualization...")
+    
+    trip_geometries = []
+    for route, usage in system.route_usage.items():
+        if usage > 0:
+            geom = system.station_routes[route]['geometry']
+            if geom:
+                for _ in range(usage):
+                    trip_geometries.append(geom)
 
-        # Walking from station (dashed blue line)
-        folium.PolyLine(
-            locations=[trip['dest_station'], trip['user_destination']],
-            color='blue', weight=2.5, opacity=0.8, dash_array='5, 5'
-        ).add_to(m)
-        
-        # Mark user's actual start and end points
-        folium.CircleMarker(location=trip['user_origin'], radius=4, color='green', fill=True, fill_color='green').add_to(m)
-        folium.CircleMarker(location=trip['user_destination'], radius=4, color='purple', fill=True, fill_color='purple').add_to(m)
+    if not trip_geometries:
+        print("No routes were used, skipping trip visualization.")
+        return
 
-    return m
+    routes_gdf = gpd.GeoDataFrame(geometry=trip_geometries, crs="EPSG:4326")
+    station_geometries = [Point(s.x, s.y) for s in system.stations]
+    station_weights = [system.station_usage[s.id] for s in system.stations]
+    stations_gdf = gpd.GeoDataFrame(geometry=station_geometries, crs="EPSG:4326")
+    stations_gdf['usage'] = station_weights
+
+    fig, ax = plt.subplots(1, 1, figsize=(15, 15))
+    routes_gdf_web_mercator = routes_gdf.to_crs(epsg=3857)
+    stations_gdf_web_mercator = stations_gdf.to_crs(epsg=3857)
+    
+    routes_gdf_web_mercator.plot(
+        ax=ax, color='crimson', linewidth=0.5, alpha=0.1, zorder=2
+    )
+    stations_gdf_web_mercator.plot(
+        ax=ax, marker='o', color='skyblue', edgecolor='black',
+        markersize=stations_gdf_web_mercator['usage'] * 20, alpha=1.0, zorder=3
+    )
+
+    cx.add_basemap(ax, source=cx.providers.CartoDB.Positron)
+    ax.set_axis_off()
+    plt.savefig('simulation_results_heatmap.png', dpi=300, bbox_inches='tight')
+    print("Results heatmap visualization saved to 'simulation_results_heatmap.png'")
 
 
 def run_simulation():
     print("=== Bike-Sharing System Simulation ===")
     
     env = simpy.Environment()
-    bike_system = BikeShareSystem(ors_api_key=ORS_API_KEY)
+    bike_system = BikeShareSystem()
     
-    total_bikes = sum(s.bikes for s in bike_system.stations)
-    total_capacity = sum(s.capacity for s in bike_system.stations)
-    print(f"System initialized: {len(bike_system.stations)} stations, {total_bikes}/{total_capacity} bikes")
+    print(f"System initialized with {len(bike_system.stations)} stations.")
+    
+    # --- New visualization call for POI distribution ---
+    create_poi_distribution_map(bike_system)
+    
     print("-" * 70)
     
     env.process(user_generator(env, bike_system, USER_ARRIVAL_RATE))
@@ -72,31 +125,13 @@ def run_simulation():
     total_trips = stats["successful_trips"] + stats["failed_trips"]
     success_rate = (stats["successful_trips"] / total_trips * 100 if total_trips > 0 else 0)
 
-    print(f"Total trip attempts: {total_trips}")
     print(f"Successful trips: {stats['successful_trips']}")
-    print(f"Failed trips: {stats['failed_trips']}")
-    print(f"Success rate: {success_rate:.1f}%")
+    print(f"Failed trips: {stats['failed_trips']} (Success rate: {success_rate:.1f}%)")
 
     if stats["successful_trips"] > 0:
-        avg_walk = stats["total_walking_distance"] / stats["successful_trips"]
-        avg_cycle = stats["total_cycling_distance"] / stats["successful_trips"]
-        avg_time = stats["total_trip_time"] / stats["successful_trips"]
-        print(f"Average walking distance per trip: {avg_walk:.2f} km")
-        print(f"Average cycling distance per trip: {avg_cycle:.2f} km")
-        print(f"Average total trip time: {avg_time:.1f} minutes")
-
-    print("\n=== Final Station States ===")
-    for station in bike_system.stations:
-        print(f"Station {station.id} ({station.neighbourhood}): {station.bikes}/{station.capacity} bikes")
-
-    if bike_system.trip_log:
-        print("\nGenerating trip visualization map...")
-        trip_map = create_trip_map(bike_system.stations, bike_system.trip_log)
-        map_file = "trip_map.html"
-        trip_map.save(map_file)
-        print(f"Map saved to '{map_file}'. Open this file in your browser to view the trips.")
+        create_results_visualization(bike_system)
     else:
-        print("\nNo successful trips were logged to generate a map.")
+        print("No successful trips to visualize.")
 
 if __name__ == "__main__":
     run_simulation()
