@@ -1,5 +1,4 @@
 # data_models.py
-# Description: Data classes for the simulation (Station, User).
 
 from dataclasses import dataclass
 from typing import Tuple
@@ -7,8 +6,8 @@ from typing import Tuple
 @dataclass
 class Station:
     id: int
-    x: float  # longitude
-    y: float  # latitude
+    x: float
+    y: float
     capacity: int
     bikes: int
     neighbourhood: str
@@ -32,5 +31,3 @@ class User:
     destination: Tuple[float, float]
     origin_type: str
     destination_type: str
-    origin_neighbourhood: str
-    destination_neighbourhood: str
