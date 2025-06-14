@@ -1,4 +1,6 @@
-cache
-data
-generated
+cache/*
+generated/*
 .ipynb_checkpoints
+__pycache__
+venv
+context.md

@@ -21,6 +21,7 @@ def user_journey(env, system: BikeShareSystem, user: User):
         return
 
     yield env.timeout(walk_to_time)
+    # The check now works correctly because take_bike() returns True/False
     if not origin_station.take_bike():
         system.stats["failed_trips"] += 1
         return
@@ -39,9 +40,9 @@ def user_journey(env, system: BikeShareSystem, user: User):
     
     system.station_usage[origin_station.id] += 1
     system.station_usage[dest_station.id] += 1
-    system.route_usage[(origin_station.id, dest_station.id)] += 1
+    if (origin_station.id, dest_station.id) in system.route_usage:
+        system.route_usage[(origin_station.id, dest_station.id)] += 1
 
-    # Log trip details for detailed visualization
     system.trip_log.append({
         'user_origin': user.origin, 'origin_station': (origin_station.x, origin_station.y),
         'dest_station': (dest_station.x, dest_station.y), 'user_destination': user.destination,
@@ -50,19 +51,38 @@ def user_journey(env, system: BikeShareSystem, user: User):
 
 def user_generator(env, system: BikeShareSystem):
     """Generates users with a variable arrival rate based on the time of day."""
+    print("[DEBUG: user_generator started]")
+    loop_count = 0
     while True:
+        loop_count += 1
         current_hour = int((env.now / 60) % 24)
         arrival_rate = system.weights.get_arrival_rate_for_hour(current_hour)
         
+        # --- DEBUG LOG ---
+        # print(f"[: Loop {loop_count}, Sim Time: {env.now:.2f} min, Hour: {current_hour}, Arrival Rate: {arrival_rate:.4f} users/min]")
+        
         if arrival_rate > 0:
-            # The time until the next user arrives is determined by an exponential distribution
-            # with the mean arrival rate for the current hour.
             time_to_next_user = random.expovariate(arrival_rate)
+            # --- DEBUG LOG ---
+            # print(f"  -> Next user in {time_to_next_user:.2f} minutes.")
+            
             yield env.timeout(time_to_next_user)
             
+            # print(f"[DEBUG: Time is now {env.now:.2f}. Attempting to generate user.]")
             user = system.generate_user(env.now)
             if user:
+                # print(f"  -> SUCCESS: User {user.id} created. Starting journey.")
                 env.process(user_journey(env, system, user))
+            else:
+                pass
+                print("  -> FAILED: system.generate_user() returned None.")
         else:
-            # If rate is zero, wait until the next hour starts
-            yield env.timeout(60 - (env.now % 60))
+            wait_time = 60 - (env.now % 60)
+            # --- DEBUG LOG ---
+            print(f"  -> Zero arrival rate. Waiting {wait_time:.2f} minutes until the next hour.")
+            yield env.timeout(wait_time)
+        
+        # Safety break to prevent infinite loops during debugging if time doesn't advance
+        if loop_count > 5000:
+            # print("[DEBUG: Safety break triggered. Too many loops.]")
+            break

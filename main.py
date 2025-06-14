@@ -5,19 +5,24 @@ from pathlib import Path
 from config import SIMULATION_TIME
 from simulation_system import BikeShareSystem
 from simulation_processes import user_generator
-from visualizations import create_trip_path_map, create_results_heatmap
+from visualizations import create_poi_distribution_map, create_trip_path_map, create_results_heatmap
 
 def run_simulation():
     print("=== Bike-Sharing System Simulation ===")
     
-    # Ensure the output directory exists
+    Path('./cache').mkdir(exist_ok=True)
     Path('./generated').mkdir(exist_ok=True)
     
     env = simpy.Environment()
     bike_system = BikeShareSystem()
     
     print(f"System initialized with {len(bike_system.stations)} stations.")
+    
+    # --- Create the new POI map before the simulation runs ---
+    create_poi_distribution_map(bike_system)
+    
     print("-" * 70)
+    print("Starting simulation...")
     
     env.process(user_generator(env, bike_system))
     env.run(until=SIMULATION_TIME)

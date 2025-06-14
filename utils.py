@@ -3,24 +3,49 @@
 import math
 import json
 import random
+import os
 import osmnx as ox
 import geopandas as gpd
 import pandas as pd
-from pathlib import Path
+import hashlib
 from shapely.geometry import Polygon, Point
 from config import NEIGHBORHOOD_AREAS_GEOJSON_PATH, POI_WEIGHTS_PATH, TIME_WEIGHTS_PATH
 
+# Configure OSMNX Caching
+ox.utils.settings.use_cache = True
+ox.utils.settings.cache_folder = './cache/osmnx'
+ox.utils.settings.log_console = False
+
+# Fallback Map
+FALLBACK_POI_MAP = {
+    'sport': 'park',
+    'restaurant': 'shops',
+    'uni': 'edu',
+    'hospital': 'shops',
+    'edu': 'home',
+}
+
+def get_file_md5(filepath: str) -> str:
+    """Calculates the MD5 hash of a file."""
+    try:
+        with open(filepath, 'rb') as f:
+            file_hash = hashlib.md5()
+            while chunk := f.read(8192):
+                file_hash.update(chunk)
+        return file_hash.hexdigest()
+    except FileNotFoundError:
+        return ""
+
 def get_osmnx_graph(city_query: str, graph_filepath: str):
-    graph_path = Path(graph_filepath)
-    if graph_path.exists():
-        print(f"Loading graph from file: {graph_path}")
-        return ox.load_graphml(filepath=graph_path)
+    if os.path.exists(graph_filepath):
+        print(f"Loading graph from file: {graph_filepath}")
+        return ox.load_graphml(filepath=graph_filepath)
     else:
         print(f"Graph file not found. Downloading network for '{city_query}'.")
         graph = ox.graph_from_place(city_query, network_type='bike')
-        print(f"Saving graph to {graph_path} for future use.")
-        graph_path.parent.mkdir(parents=True, exist_ok=True)
-        ox.save_graphml(graph, filepath=graph_path)
+        os.makedirs(os.path.dirname(graph_filepath), exist_ok=True)
+        print(f"Saving graph to {graph_filepath} for future use.")
+        ox.save_graphml(graph, filepath=graph_filepath)
         return graph
 
 def haversine_distance(p1: tuple, p2: tuple) -> float:
@@ -30,7 +55,6 @@ def haversine_distance(p1: tuple, p2: tuple) -> float:
     return 6371 * (2 * math.asin(math.sqrt(a)))
 
 def get_random_point_in_polygon(polygon: Polygon) -> tuple:
-    """Generates a random longitude/latitude point within a given Shapely Polygon."""
     min_x, min_y, max_x, max_y = polygon.bounds
     while True:
         point = Point(random.uniform(min_x, max_x), random.uniform(min_y, max_y))
@@ -39,10 +63,9 @@ def get_random_point_in_polygon(polygon: Polygon) -> tuple:
 
 class POIDatabase:
     def __init__(self, database_path: str):
-        self.db_file_path = Path(database_path)
+        self.db_file_path = database_path
         self.poi_data = {}
-        
-        if self.db_file_path.exists():
+        if os.path.exists(self.db_file_path):
             print("Loading existing POI database...")
             self.load_database()
         else:
@@ -55,125 +78,120 @@ class POIDatabase:
             areas_gdf = gpd.read_file(NEIGHBORHOOD_AREAS_GEOJSON_PATH)
         except Exception as e:
             raise SystemExit(f"Error reading '{NEIGHBORHOOD_AREAS_GEOJSON_PATH}': {e}")
-
-        # Define which names from the geojson are special large areas
-        special_areas = {
-            'uni': 'campus',
-            'station_area': 'Station' 
-        }
         
-        # Define tags for standard POI queries
+        # 'uni' (campus) is a special case where the polygon itself is the POI
+        special_areas = {'uni': 'campus', 'station':'station'}
+        
+        # 'station' is now a standard query type, but with its own logic
         poi_tags = {
             'home': {'building': ['residential', 'house', 'apartments']},
-            'shops': {'shop': True},
-            'hospital': {'amenity': ['hospital', 'clinic', 'doctors']},
+            'shops': {'shop': True}, 'hospital': {'amenity': ['hospital', 'clinic', 'doctors']},
             'edu': {'amenity': ['school', 'kindergarten', 'college']},
-            'restaurant': {'amenity': 'restaurant'},
-            'park': {'leisure': ['park', 'playground', 'garden']},
+            'restaurant': {'amenity': 'restaurant'}, 'park': {'leisure': ['park', 'playground', 'garden']},
             'sport': {'leisure': ['sports_centre', 'pitch', 'stadium'], 'sport': True}
         }
-
+        # Initialize all lists, including 'station'
         self.poi_data = {key: [] for key in poi_tags}
         self.poi_data.update({key: [] for key in special_areas})
+        self.poi_data['station'] = []
 
         for _, row in areas_gdf.iterrows():
-            area_name = row['buurtnaam']
-            geometry = row['geometry']
+            area_name, geometry = row['buurtnaam'], row['geometry']
             
-            is_special = False
+            # Handle special area polygons first (like 'uni')
+            is_special_area = False
             for key, val in special_areas.items():
                 if area_name == val:
-                    print(f"  -> Storing special area polygon: '{area_name}' as '{key}'")
                     self.poi_data[key].append({'name': area_name, 'geometry': geometry})
-                    is_special = True
+                    is_special_area = True
                     break
-            
-            if not is_special:
-                print(f"  -> Querying standard POIs within: '{area_name}'")
-                self._fetch_and_append_pois(geometry, poi_tags)
+            if is_special_area:
+                continue
+
+
+            # Handle all other regular neighborhoods
+            self._fetch_and_append_pois(geometry, poi_tags)
         
         self.save_database()
         print("Successfully generated and saved new POI database.")
+        self._print_generation_summary()
+
+    def _print_generation_summary(self):
+        print("\n--- POI Database Generation Summary ---")
+        for key, value in sorted(self.poi_data.items()):
+            print(f"  -> Found {len(value):>5} POIs for type: '{key}'")
+        print("------------------------------------\n")
+
+    def _fetch_and_append_buildings_for_station(self, geometry):
+        """Fetches all building centroids within the 'Station' area polygon."""
+        try:
+            # The tag {'building': True} gets all types of buildings
+            pois = ox.features_from_polygon(geometry, tags={'building': True})
+            for _, poi in pois.iterrows():
+                self.poi_data['station'].append({'lat': poi.geometry.centroid.y, 'lon': poi.geometry.centroid.x})
+        except Exception as e:
+            print(f"    - Could not fetch buildings for station area: {e}")
 
     def _fetch_and_append_pois(self, geometry, poi_tags):
         for poi_type, tags in poi_tags.items():
             try:
                 pois = ox.features_from_polygon(geometry, tags)
-                
-                # Apply sampling for 'home' POIs to keep the list manageable
                 if poi_type == 'home' and len(pois) > 200:
                     pois = pois.sample(n=200)
-
                 for _, poi in pois.iterrows():
-                    self.poi_data[poi_type].append({
-                        'lat': poi.geometry.centroid.y,
-                        'lon': poi.geometry.centroid.x,
-                    })
+                    self.poi_data[poi_type].append({'lat': poi.geometry.centroid.y, 'lon': poi.geometry.centroid.x})
             except Exception:
                 continue
     
     def load_database(self):
         with open(self.db_file_path, 'r') as f:
-            # For polygons, we need to convert them back from a list representation
             raw_data = json.load(f)
+            self.poi_data = {}
             for key, poi_list in raw_data.items():
-                for poi in poi_list:
-                    if 'geometry' in poi:
-                        poi['geometry'] = Polygon(poi['geometry']['coordinates'][0])
-            self.poi_data = raw_data
+                self.poi_data[key] = []
+                for poi_dict in poi_list:
+                    if 'geometry' in poi_dict and poi_dict.get('geometry'):
+                        poi_dict['geometry'] = Polygon(poi_dict['geometry']['coordinates'][0])
+                    self.poi_data[key].append(poi_dict)
     
     def save_database(self):
-        # Create a serializable copy of the data
+        os.makedirs(os.path.dirname(self.db_file_path), exist_ok=True)
         serializable_data = {}
         for key, poi_list in self.poi_data.items():
             serializable_data[key] = []
             for poi in poi_list:
                 if 'geometry' in poi:
-                    # Convert Shapely Polygon to a GeoJSON-like dict
-                    serializable_data[key].append({
-                        'name': poi['name'],
-                        'geometry': {
-                            'type': 'Polygon',
-                            'coordinates': [list(poi['geometry'].exterior.coords)]
-                        }
-                    })
+                    serializable_data[key].append({'name': poi['name'], 'geometry': {'type': 'Polygon', 'coordinates': [list(poi['geometry'].exterior.coords)]}})
                 else:
                     serializable_data[key].append(poi)
-
-        self.db_file_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.db_file_path, 'w') as f:
             json.dump(serializable_data, f, indent=2)
 
     def get_random_poi(self, poi_type: str):
-        if poi_type in self.poi_data and self.poi_data[poi_type]:
-            return random.choice(self.poi_data[poi_type])
-        return None
+        original_type = poi_type
+        while poi_type not in self.poi_data or not self.poi_data[poi_type]:
+            if poi_type is None:
+                print(f"[Warning] POI type '{original_type}' and its fallbacks are all empty.")
+                return None
+        return random.choice(self.poi_data[poi_type])
 
 class WeightManager:
-    """Loads and provides access to trip generation weights."""
     def __init__(self):
         try:
             self.poi_weights = pd.read_csv(POI_WEIGHTS_PATH, index_col=0)
             self.time_weights = pd.read_csv(TIME_WEIGHTS_PATH, index_col='hour')
-            # Normalize poi_weights columns so they sum to 1, making them probabilities
             self.poi_weights = self.poi_weights.div(self.poi_weights.sum(axis=0), axis=1).fillna(0)
             print("Successfully loaded POI and time weights.")
         except FileNotFoundError as e:
             raise SystemExit(f"Error: Weight file not found. {e}")
 
     def get_poi_type_for_hour(self, hour: int) -> str:
-        """Returns a POI type based on weighted probabilities for a given hour."""
         hour_str = str(hour)
         if hour_str not in self.poi_weights.columns:
-            return random.choice(self.poi_weights.index) # Fallback for hours with no data
-        
+            return random.choice(self.poi_weights.index)
         weights = self.poi_weights[hour_str]
         return random.choices(weights.index, weights=weights.values, k=1)[0]
     
     def get_arrival_rate_for_hour(self, hour: int) -> float:
-        """Returns the user arrival rate per minute for a given hour."""
         key = f"hour_{hour}"
-        if key in self.time_weights.index:
-            # Convert hourly trips to per-minute rate
-            return self.time_weights.loc[key, 'estimated_trips'] / 60
-        return 0.01 # Default low arrival rate if hour is missing
+        return self.time_weights.loc[key, 'estimated_trips'] / 60 if key in self.time_weights.index else 0.01

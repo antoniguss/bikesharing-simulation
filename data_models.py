@@ -18,11 +18,23 @@ class Station:
     def has_space(self) -> bool:
         return self.bikes < self.capacity
 
-    def take_bike(self):
-        self.bikes -= 1
+    def take_bike(self) -> bool:
+        """
+        Takes a bike if available. Returns True on success, False on failure.
+        """
+        if self.has_bike():
+            self.bikes -= 1
+            return True
+        return False
 
-    def return_bike(self):
-        self.bikes += 1
+    def return_bike(self) -> bool:
+        """
+        Returns a bike if space is available. Returns True on success, False on failure.
+        """
+        if self.has_space():
+            self.bikes += 1
+            return True
+        return False
 
 @dataclass
 class User:
