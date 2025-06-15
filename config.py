@@ -1,8 +1,8 @@
 # config.py
 
 # --- Simulation Parameters ---
-SIMULATION_TIME = 3 * 60      # Total simulation time in minutes
-SIMULATION_START_TIME = 0 * 60
+SIMULATION_DURATION = 3 * 60      # Total simulation time in minutes
+SIMULATION_START_TIME = 6 * 60
 
 
 MAX_TOTAL_WALK_DISTANCE_KM = 1.0 # 1 KM walking max

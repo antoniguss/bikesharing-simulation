@@ -8,9 +8,12 @@ from simulation_system import BikeShareSystem
 def user_journey(env, system: BikeShareSystem, user: User):
     origin_station = system.find_nearest_station_with_bike(user.origin)
     dest_station = system.find_nearest_station_with_space(user.destination)
+
+    if not origin_station or not dest_station:
+       system.stats['failed_trips'] += 1 
+       return
     
-    if not origin_station or not dest_station or origin_station.id == dest_station.id:
-        system.stats["failed_trips"] += 1
+    if origin_station.id == dest_station.id:
         return
         
     walk_to_dist, walk_to_time = system.get_walking_info(user.origin, (origin_station.x, origin_station.y))
@@ -48,7 +51,8 @@ def user_journey(env, system: BikeShareSystem, user: User):
     system.trip_log.append({
         'user_origin': user.origin, 'origin_station': (origin_station.x, origin_station.y),
         'dest_station': (dest_station.x, dest_station.y), 'user_destination': user.destination,
-        'route_geometry': route_geom
+        'route_geometry': route_geom,
+        'start_time': env.now,
     })
 
 def user_generator(env, system: BikeShareSystem):

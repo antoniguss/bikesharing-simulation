@@ -2,10 +2,10 @@
 
 import simpy
 from pathlib import Path
-from config import SIMULATION_TIME, SIMULATION_START_TIME
+from config import SIMULATION_DURATION, SIMULATION_START_TIME
 from simulation_system import BikeShareSystem
 from simulation_processes import user_generator
-from visualizations import create_poi_distribution_map, create_trip_path_map, create_results_heatmap
+import visualizations
 
 def run_simulation():
     print("=== Bike-Sharing System Simulation ===")
@@ -19,13 +19,13 @@ def run_simulation():
     print(f"System initialized with {len(bike_system.stations)} stations.")
     
     # --- Create the new POI map before the simulation runs ---
-    create_poi_distribution_map(bike_system)
+    visualizations.create_poi_distribution_map(bike_system)
     
     print("-" * 70)
     print("Starting simulation...")
     
     env.process(user_generator(env, bike_system))
-    env.run(until=SIMULATION_TIME)
+    env.run(until=SIMULATION_START_TIME + SIMULATION_DURATION)
 
     print("-" * 70)
     print("=== Simulation Results ===")
@@ -37,8 +37,9 @@ def run_simulation():
     print(f"Failed trips: {stats['failed_trips']} (Success rate: {success_rate:.1f}%)")
 
     if stats["successful_trips"] > 0:
-        create_trip_path_map(bike_system)
-        create_results_heatmap(bike_system)
+        visualizations.create_trip_path_map(bike_system)
+        visualizations.create_results_heatmap(bike_system)
+        visualizations.create_hourly_trip_animation_map(bike_system)
     else:
         print("No successful trips to visualize.")
 

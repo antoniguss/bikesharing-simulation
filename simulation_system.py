@@ -7,7 +7,7 @@ import pickle
 import osmnx as ox
 import geopandas as gpd
 import networkx as nx
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional, List
 
 from data_models import Station, User
 from utils import POIDatabase, WeightManager, haversine_distance, get_osmnx_graph, get_random_point_in_polygon, get_file_md5
@@ -22,7 +22,7 @@ class BikeShareSystem:
         self.poi_db = POIDatabase(POI_DATABASE_PATH)
         self.weights = WeightManager()
         self.graph = get_osmnx_graph(CITY_QUERY, GRAPH_FILE_PATH)
-        self.stations = self._create_stations_from_file()
+        self.stations : List[Station] = self._create_stations_from_file()
         self.station_routes = self._precompute_station_routes()
         
         self.stats = {
@@ -33,9 +33,9 @@ class BikeShareSystem:
         self.station_usage = {s.id: 0 for s in self.stations}
         self.route_usage = {key: 0 for key in self.station_routes}
 
-    def _create_stations_from_file(self):
+    def _create_stations_from_file(self) -> List[Station]:
         stations_gdf = gpd.read_file(STATION_GEOJSON_PATH)
-        stations = []
+        stations : List[Station] = []
         for index, row in stations_gdf.iterrows():
             centroid = row.geometry.centroid
             stations.append(Station(
@@ -97,9 +97,6 @@ class BikeShareSystem:
 
         origin_poi = self.poi_db.get_random_poi(origin_type)
         dest_poi = self.poi_db.get_random_poi(dest_type)
-        if not origin_poi or not dest_poi or origin_poi == dest_poi:
-            print(f"ERROR: couldn't generate, {origin_poi}, {dest_poi}")
-            return None
 
         origin_coords = get_random_point_in_polygon(origin_poi['geometry']) if 'geometry' in origin_poi else (origin_poi['lon'], origin_poi['lat'])
         dest_coords = get_random_point_in_polygon(dest_poi['geometry']) if 'geometry' in dest_poi else (dest_poi['lon'], dest_poi['lat'])

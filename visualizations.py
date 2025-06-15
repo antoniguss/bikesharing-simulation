@@ -1,13 +1,112 @@
 # visualizations.py
 
 import folium
+import folium.plugins
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import contextily as cx
-from shapely.geometry import Point
+from shapely.geometry import Point, LineString, MultiLineString, mapping
 from simulation_system import BikeShareSystem
 from config import NEIGHBORHOOD_AREAS_GEOJSON_PATH
+from datetime import datetime, timedelta
 
+
+BASE_DATE = datetime(2025, 1, 1)
+
+def create_hourly_trip_animation_map(system: BikeShareSystem):
+    """
+    Generates a Folium map animating trips, grouped by the hour they started.
+    """
+    print("Generating hourly trip animation map...")
+    if not system.trip_log:
+        print("No trips were logged, skipping animation map generation."); return
+
+    # Use the first station as a fallback center point
+    map_center = [system.stations[0].y, system.stations[0].x]
+    m = folium.Map(location=map_center, zoom_start=13, tiles="CartoDB positron")
+
+    features = []
+
+    for trip in system.trip_log:
+        start_time_minutes = trip['start_time']
+        # Group trips by the hour they started. The timestamp will be the end of that hour.
+        start_hour = int((start_time_minutes / 60) % 24)
+        # Use the end of the hour as the timestamp for the feature
+        timestamp = BASE_DATE + timedelta(minutes=(start_hour + 1) * 60)
+        timestamp_str = timestamp.isoformat()
+
+        # Create GeoJSON features for each segment of the trip
+        # Walk to station
+        walk_to_geom = LineString([trip['user_origin'], trip['origin_station']])
+        features.append({
+            'type': 'Feature',
+            'geometry': mapping(walk_to_geom),
+            'properties': {
+                'times': [timestamp_str] * len(walk_to_geom.coords),
+                'style': {'color': 'blue', 'weight': 2, 'opacity': 0.8, 'dashArray': '5, 5'},
+                'popup': f"Walk to Station (Trip started hour {start_hour})"
+            }
+        })
+
+        # Cycle route
+        cycle_geom = trip.get('route_geometry')
+        if cycle_geom:
+            # Ensure cycle_geom is a Shapely geometry object
+            if isinstance(cycle_geom, (LineString, MultiLineString)):
+                 # Flatten coordinates for MultiLineString
+                coords = []
+                if isinstance(cycle_geom, LineString):
+                    coords = list(cycle_geom.coords)
+                elif isinstance(cycle_geom, MultiLineString):
+                    for line in cycle_geom.geoms:
+                        coords.extend(list(line.coords))
+
+                if coords:
+                    features.append({
+                        'type': 'Feature',
+                        'geometry': mapping(cycle_geom),
+                        'properties': {
+                            'times': [timestamp_str] * len(coords),
+                            'style': {'color': 'red', 'weight': 3, 'opacity': 0.8},
+                            'popup': f"Cycle Route (Trip started hour {start_hour})"
+                        }
+                    })
+
+
+        # Walk from station
+        walk_from_geom = LineString([trip['dest_station'], trip['user_destination']])
+        features.append({
+            'type': 'Feature',
+            'geometry': mapping(walk_from_geom),
+            'properties': {
+                'times': [timestamp_str] * len(walk_from_geom.coords),
+                'style': {'color': 'blue', 'weight': 2, 'opacity': 0.8, 'dashArray': '5, 5'},
+                'popup': f"Walk from Station (Trip started hour {start_hour})"
+            }
+        })
+
+    # Add the TimestampedGeoJson layer to the map
+    folium.plugins.TimestampedGeoJson(
+        {'type': 'FeatureCollection', 'features': features},
+        period='PT1H',  # Animation steps every hour
+        add_last_point=True,
+        auto_play=False,
+        loop=False,
+        duration='PT1M', # How long each step lasts
+        transition_time=500, # Time between steps
+        time_slider_drag_update=True
+    ).add_to(m)
+
+    # Add station markers (static, as animating capacity is complex here)
+    for s in system.stations:
+        tooltip = folium.Tooltip(text=f"Station {s.id}\nBikes: {s.bikes}\nCapacity: {s.capacity}")
+        folium.Marker(location=[s.y, s.x], icon=folium.Icon(color='green', icon='bicycle', prefix='fa'), tooltip=tooltip).add_to(m)
+
+
+    folium.LayerControl().add_to(m)
+    map_filename = './generated/hourly_trip_animation.html'
+    m.save(map_filename)
+    print(f"Hourly trip animation map saved to '{map_filename}'")
 def create_poi_distribution_map(system: BikeShareSystem):
     """
     Generates a Folium map showing the distribution of all POI types
@@ -78,10 +177,11 @@ def create_trip_path_map(system: BikeShareSystem):
         print("No trips were logged, skipping map generation."); return
 
     map_center = [system.stations[0].y, system.stations[0].x]
-    m = folium.Map(location=map_center, zoom_start=13)
+    m = folium.Map(location=map_center, zoom_start=13,  tiles="CartoDB positron")
 
     for s in system.stations:
-        folium.Marker(location=[s.y, s.x], icon=folium.Icon(color='green', icon='bicycle', prefix='fa')).add_to(m)
+        tooltip = folium.Tooltip(text=f"Station {s.id}\n{s.bikes}/{s.capacity} available")
+        folium.Marker(location=[s.y, s.x], icon=folium.Icon(color='green', icon='bicycle', prefix='fa'), tooltip=tooltip).add_to(m)
 
     for trip in system.trip_log:
         folium.PolyLine(locations=[(trip['user_origin'][1], trip['user_origin'][0]), (trip['origin_station'][1], trip['origin_station'][0])], color='blue', weight=2, opacity=0.8, dash_array='5, 5').add_to(m)

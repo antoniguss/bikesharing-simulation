@@ -169,7 +169,6 @@ class POIDatabase:
             json.dump(serializable_data, f, indent=2)
 
     def get_random_poi(self, poi_type: str):
-        # print(poi_type, "GETTING RANDOM POI OF TYPE {poi_type}")
         return random.choice(self.poi_data[poi_type.strip()])
 
 class WeightManager:
