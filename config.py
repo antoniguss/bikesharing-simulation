@@ -1,7 +1,7 @@
 # config.py
 
 # --- Simulation Parameters ---
-SIMULATION_DURATION = 3 * 60      # Total simulation time in minutes
+SIMULATION_DURATION = 24 * 60      # Total simulation time in minutes
 SIMULATION_START_TIME = 6 * 60
 
 

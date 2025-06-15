@@ -9,7 +9,7 @@ from shapely.geometry import Point, LineString, MultiLineString, mapping
 from simulation_system import BikeShareSystem
 from config import NEIGHBORHOOD_AREAS_GEOJSON_PATH
 from datetime import datetime, timedelta
-
+import numpy as np
 
 BASE_DATE = datetime(2025, 1, 1)
 
@@ -21,21 +21,19 @@ def create_hourly_trip_animation_map(system: BikeShareSystem):
     if not system.trip_log:
         print("No trips were logged, skipping animation map generation."); return
 
-    # Use the first station as a fallback center point
     map_center = [system.stations[0].y, system.stations[0].x]
     m = folium.Map(location=map_center, zoom_start=13, tiles="CartoDB positron")
 
     features = []
+    walk_feature_group = folium.FeatureGroup(name='Walking Routes', show=True)
+    cycle_feature_group = folium.FeatureGroup(name='Cycling Routes', show=True)
 
     for trip in system.trip_log:
         start_time_minutes = trip['start_time']
-        # Group trips by the hour they started. The timestamp will be the end of that hour.
         start_hour = int((start_time_minutes / 60) % 24)
-        # Use the end of the hour as the timestamp for the feature
         timestamp = BASE_DATE + timedelta(minutes=(start_hour + 1) * 60)
         timestamp_str = timestamp.isoformat()
 
-        # Create GeoJSON features for each segment of the trip
         # Walk to station
         walk_to_geom = LineString([trip['user_origin'], trip['origin_station']])
         features.append({
@@ -50,28 +48,24 @@ def create_hourly_trip_animation_map(system: BikeShareSystem):
 
         # Cycle route
         cycle_geom = trip.get('route_geometry')
-        if cycle_geom:
-            # Ensure cycle_geom is a Shapely geometry object
-            if isinstance(cycle_geom, (LineString, MultiLineString)):
-                 # Flatten coordinates for MultiLineString
-                coords = []
-                if isinstance(cycle_geom, LineString):
-                    coords = list(cycle_geom.coords)
-                elif isinstance(cycle_geom, MultiLineString):
-                    for line in cycle_geom.geoms:
-                        coords.extend(list(line.coords))
+        if cycle_geom and isinstance(cycle_geom, (LineString, MultiLineString)):
+            coords = []
+            if isinstance(cycle_geom, LineString):
+                coords = list(cycle_geom.coords)
+            elif isinstance(cycle_geom, MultiLineString):
+                for line in cycle_geom.geoms:
+                    coords.extend(list(line.coords))
 
-                if coords:
-                    features.append({
-                        'type': 'Feature',
-                        'geometry': mapping(cycle_geom),
-                        'properties': {
-                            'times': [timestamp_str] * len(coords),
-                            'style': {'color': 'red', 'weight': 3, 'opacity': 0.8},
-                            'popup': f"Cycle Route (Trip started hour {start_hour})"
-                        }
-                    })
-
+            if coords:
+                features.append({
+                    'type': 'Feature',
+                    'geometry': mapping(cycle_geom),
+                    'properties': {
+                        'times': [timestamp_str] * len(coords),
+                        'style': {'color': 'red', 'weight': 20, 'opacity': 0.2},
+                        'popup': f"Cycle Route (Trip started hour {start_hour})"
+                    }
+                })
 
         # Walk from station
         walk_from_geom = LineString([trip['dest_station'], trip['user_destination']])
@@ -88,20 +82,25 @@ def create_hourly_trip_animation_map(system: BikeShareSystem):
     # Add the TimestampedGeoJson layer to the map
     folium.plugins.TimestampedGeoJson(
         {'type': 'FeatureCollection', 'features': features},
-        period='PT1H',  # Animation steps every hour
+        period='PT1H',
         add_last_point=True,
         auto_play=False,
         loop=False,
-        duration='PT1M', # How long each step lasts
-        transition_time=500, # Time between steps
+        duration='PT1M',
+        transition_time=500,
         time_slider_drag_update=True
     ).add_to(m)
 
-    # Add station markers (static, as animating capacity is complex here)
+    # Add station markers with toggleable feature groups
+    station_feature_group = folium.FeatureGroup(name='Stations', show=True)
     for s in system.stations:
-        tooltip = folium.Tooltip(text=f"Station {s.id}\nBikes: {s.bikes}\nCapacity: {s.capacity}")
-        folium.Marker(location=[s.y, s.x], icon=folium.Icon(color='green', icon='bicycle', prefix='fa'), tooltip=tooltip).add_to(m)
-
+        tooltip = folium.Tooltip(text=f"{s.neighbourhood}\nBikes: {s.bikes}\nCapacity: {s.capacity}")
+        folium.Marker(
+            location=[s.y, s.x],
+            icon=folium.Icon(color='green', icon='bicycle', prefix='fa'),
+            tooltip=tooltip
+        ).add_to(station_feature_group)
+    station_feature_group.add_to(m)
 
     folium.LayerControl().add_to(m)
     map_filename = './generated/hourly_trip_animation.html'
@@ -216,3 +215,54 @@ def create_results_heatmap(system: BikeShareSystem):
     heatmap_path = './generated/simulation_results_heatmap.png'
     plt.savefig(heatmap_path, dpi=300, bbox_inches='tight', pad_inches=0.1)
     print(f"Results heatmap saved to '{heatmap_path}'")
+
+def create_hourly_station_heatmap(system: BikeShareSystem):
+    """
+    Generates a heatmap showing station usage by hour.
+    """
+    print("Generating hourly station usage heatmap...")
+    if not system.trip_log:
+        print("No trips were logged, skipping heatmap generation."); return
+
+    # Create a DataFrame with hourly usage for each station
+    hourly_usage = {s.id: [0] * 24 for s in system.stations}
+    
+    for trip in system.trip_log:
+        hour = int((trip['start_time'] / 60) % 24)
+        # Get station IDs from coordinates
+        origin_station = next(s for s in system.stations if (s.x, s.y) == trip['origin_station'])
+        dest_station = next(s for s in system.stations if (s.x, s.y) == trip['dest_station'])
+        hourly_usage[origin_station.id][hour] += 1
+        hourly_usage[dest_station.id][hour] += 1
+
+    # Create the heatmap
+    fig, ax = plt.subplots(figsize=(15, 8))
+    data = np.array([hourly_usage[s.id] for s in system.stations])
+    im = ax.imshow(data, cmap='YlOrRd')
+
+    # Add labels
+    ax.set_xticks(np.arange(24))
+    ax.set_yticks(np.arange(len(system.stations)))
+    ax.set_xticklabels([f"{h:02d}:00" for h in range(24)])
+    ax.set_yticklabels([s.neighbourhood for s in system.stations])
+
+    # Rotate x-axis labels
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+
+    # Add colorbar
+    cbar = ax.figure.colorbar(im, ax=ax)
+    cbar.ax.set_ylabel("Number of Trips", rotation=-90, va="bottom")
+
+    # Add title and labels
+    ax.set_title("Station Usage by Hour")
+    ax.set_xlabel("Hour of Day")
+    ax.set_ylabel("Station")
+
+    # Adjust layout
+    plt.tight_layout()
+    
+    # Save the figure
+    heatmap_path = './generated/hourly_station_heatmap.png'
+    plt.savefig(heatmap_path, dpi=300, bbox_inches='tight')
+    print(f"Hourly station heatmap saved to '{heatmap_path}'")
+    plt.close()

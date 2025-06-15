@@ -36,10 +36,23 @@ def run_simulation():
     print(f"Successful trips: {stats['successful_trips']}")
     print(f"Failed trips: {stats['failed_trips']} (Success rate: {success_rate:.1f}%)")
 
+    # Print station usage statistics
+    print("\n=== Station Usage Statistics ===")
+    sorted_stations = sorted(bike_system.stations, key=lambda s: bike_system.station_usage[s.id], reverse=True)
+    print("\nMost Used Stations:")
+    for s in sorted_stations[:5]:
+        print(f"Station {s.neighbourhood}: {bike_system.station_usage[s.id]} trips")
+    
+    print("\nStations with Most Failures:")
+    sorted_failures = sorted(bike_system.stations, key=lambda s: bike_system.station_failures[s.id], reverse=True)
+    for s in sorted_failures[:5]:
+        print(f"Station {s.neighbourhood}: {bike_system.station_failures[s.id]} failures")
+
     if stats["successful_trips"] > 0:
         visualizations.create_trip_path_map(bike_system)
         visualizations.create_results_heatmap(bike_system)
         visualizations.create_hourly_trip_animation_map(bike_system)
+        visualizations.create_hourly_station_heatmap(bike_system)
     else:
         print("No successful trips to visualize.")
 

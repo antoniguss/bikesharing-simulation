@@ -31,6 +31,7 @@ class BikeShareSystem:
         }
         self.trip_log = []
         self.station_usage = {s.id: 0 for s in self.stations}
+        self.station_failures = {s.id: 0 for s in self.stations}  # Track failures per station
         self.route_usage = {key: 0 for key in self.station_routes}
 
     def _create_stations_from_file(self) -> List[Station]:
@@ -117,8 +118,18 @@ class BikeShareSystem:
 
     def find_nearest_station_with_bike(self, loc: tuple):
         available = [s for s in self.stations if s.has_bike()]
+        if not available:
+            # Track failure for all stations that were checked
+            for s in self.stations:
+                if not s.has_bike():
+                    self.station_failures[s.id] += 1
         return min(available, key=lambda s: haversine_distance(loc, (s.x, s.y)), default=None)
 
     def find_nearest_station_with_space(self, loc: tuple):
         available = [s for s in self.stations if s.has_space()]
+        if not available:
+            # Track failure for all stations that were checked
+            for s in self.stations:
+                if not s.has_space():
+                    self.station_failures[s.id] += 1
         return min(available, key=lambda s: haversine_distance(loc, (s.x, s.y)), default=None)
