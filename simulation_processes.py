@@ -1,6 +1,7 @@
 # simulation_processes.py
 
 import random
+import config
 from data_models import User
 from simulation_system import BikeShareSystem
 
@@ -16,7 +17,8 @@ def user_journey(env, system: BikeShareSystem, user: User):
     walk_from_dist, walk_from_time = system.get_walking_info((dest_station.x, dest_station.y), user.destination)
     cycle_dist, cycle_time, route_geom = system.get_cycling_info(origin_station.id, dest_station.id)
     
-    if (walk_to_dist + walk_from_dist) > 2.0:
+    if (walk_to_dist + walk_from_dist) > config.MAX_TOTAL_WALK_DISTANCE_KM:
+        print(f"Trip failed: total_walk_dist = {walk_to_dist + walk_from_dist} > {config.MAX_TOTAL_WALK_DISTANCE_KM}")
         system.stats["failed_trips"] += 1
         return
 
@@ -51,7 +53,7 @@ def user_journey(env, system: BikeShareSystem, user: User):
 
 def user_generator(env, system: BikeShareSystem):
     """Generates users with a variable arrival rate based on the time of day."""
-    print("[DEBUG: user_generator started]")
+    # print("[DEBUG: user_generator started]")
     loop_count = 0
     while True:
         loop_count += 1
@@ -75,7 +77,7 @@ def user_generator(env, system: BikeShareSystem):
                 env.process(user_journey(env, system, user))
             else:
                 pass
-                print("  -> FAILED: system.generate_user() returned None.")
+                # print("  -> FAILED: system.generate_user() returned None.")
         else:
             wait_time = 60 - (env.now % 60)
             # --- DEBUG LOG ---

@@ -1,7 +1,11 @@
 # config.py
 
 # --- Simulation Parameters ---
-SIMULATION_TIME = 1440      # Total simulation time in minutes (24 hours)
+SIMULATION_TIME = 3 * 60      # Total simulation time in minutes
+SIMULATION_START_TIME = 0 * 60
+
+
+MAX_TOTAL_WALK_DISTANCE_KM = 1.0 # 1 KM walking max
 
 # --- Data & Model Paths (Updated with new cache paths) ---
 # Cached data that can be regenerated

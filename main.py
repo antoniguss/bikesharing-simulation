@@ -2,7 +2,7 @@
 
 import simpy
 from pathlib import Path
-from config import SIMULATION_TIME
+from config import SIMULATION_TIME, SIMULATION_START_TIME
 from simulation_system import BikeShareSystem
 from simulation_processes import user_generator
 from visualizations import create_poi_distribution_map, create_trip_path_map, create_results_heatmap
@@ -13,7 +13,7 @@ def run_simulation():
     Path('./cache').mkdir(exist_ok=True)
     Path('./generated').mkdir(exist_ok=True)
     
-    env = simpy.Environment()
+    env = simpy.Environment(initial_time=SIMULATION_START_TIME)
     bike_system = BikeShareSystem()
     
     print(f"System initialized with {len(bike_system.stations)} stations.")

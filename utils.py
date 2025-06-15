@@ -8,6 +8,7 @@ import osmnx as ox
 import geopandas as gpd
 import pandas as pd
 import hashlib
+import csv
 from shapely.geometry import Polygon, Point
 from config import NEIGHBORHOOD_AREAS_GEOJSON_PATH, POI_WEIGHTS_PATH, TIME_WEIGHTS_PATH
 
@@ -168,30 +169,47 @@ class POIDatabase:
             json.dump(serializable_data, f, indent=2)
 
     def get_random_poi(self, poi_type: str):
-        original_type = poi_type
-        while poi_type not in self.poi_data or not self.poi_data[poi_type]:
-            if poi_type is None:
-                print(f"[Warning] POI type '{original_type}' and its fallbacks are all empty.")
-                return None
-        return random.choice(self.poi_data[poi_type])
+        # print(poi_type, "GETTING RANDOM POI OF TYPE {poi_type}")
+        return random.choice(self.poi_data[poi_type.strip()])
 
 class WeightManager:
     def __init__(self):
         try:
+            # Read CSV into DataFrame, index_col=0 to use first column as amenity index
             self.poi_weights = pd.read_csv(POI_WEIGHTS_PATH, index_col=0)
+            
+            # Ensure column names are strings (hours as '0'...'23')
+            self.poi_weights.columns = self.poi_weights.columns.map(str)
+            
+            # Load time weights as before
             self.time_weights = pd.read_csv(TIME_WEIGHTS_PATH, index_col='hour')
-            self.poi_weights = self.poi_weights.div(self.poi_weights.sum(axis=0), axis=1).fillna(0)
+
             print("Successfully loaded POI and time weights.")
+        
         except FileNotFoundError as e:
             raise SystemExit(f"Error: Weight file not found. {e}")
 
     def get_poi_type_for_hour(self, hour: int) -> str:
         hour_str = str(hour)
+        
         if hour_str not in self.poi_weights.columns:
+            # fallback
             return random.choice(self.poi_weights.index)
+        
         weights = self.poi_weights[hour_str]
-        return random.choices(weights.index, weights=weights.values, k=1)[0]
+        
+        if weights.sum() == 0:
+            # fallback if all weights zero
+            return random.choice(self.poi_weights.index)
+        
+        # weighted random choice among amenities
+        choices = random.choices(weights.index, weights=list(weights.values), k=1)
+        return str(choices[0])
     
     def get_arrival_rate_for_hour(self, hour: int) -> float:
         key = f"hour_{hour}"
-        return self.time_weights.loc[key, 'estimated_trips'] / 60 if key in self.time_weights.index else 0.01
+        if key in self.time_weights.index:
+            value = self.time_weights.loc[key, 'estimated_trips']
+            return float(value) / 60
+        else:
+            return 0.01

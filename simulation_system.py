@@ -98,6 +98,7 @@ class BikeShareSystem:
         origin_poi = self.poi_db.get_random_poi(origin_type)
         dest_poi = self.poi_db.get_random_poi(dest_type)
         if not origin_poi or not dest_poi or origin_poi == dest_poi:
+            print(f"ERROR: couldn't generate, {origin_poi}, {dest_poi}")
             return None
 
         origin_coords = get_random_point_in_polygon(origin_poi['geometry']) if 'geometry' in origin_poi else (origin_poi['lon'], origin_poi['lat'])
