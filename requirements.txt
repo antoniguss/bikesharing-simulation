@@ -45,5 +45,3 @@ urllib3==2.4.0
 xyzservices==2025.4.0
 openrouteservice==2.3.3
 python-dotenv==1.0.1
-streamlit==1.32.0
-streamlit-folium==0.15.1
