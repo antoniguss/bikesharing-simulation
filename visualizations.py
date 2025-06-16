@@ -3,15 +3,57 @@
 import folium
 import folium.plugins
 import geopandas as gpd
+import numpy as np
 import matplotlib.pyplot as plt
 import contextily as cx
 from shapely.geometry import Point, LineString, MultiLineString, mapping
-from simulation_system import BikeShareSystem
-from config import NEIGHBORHOOD_AREAS_GEOJSON_PATH
 from datetime import datetime, timedelta
-import numpy as np
+
+from simulation_system import BikeShareSystem
+from config import (
+    NEIGHBORHOOD_AREAS_GEOJSON_PATH, POI_MAP_PATH, ALL_TRIP_PATHS_MAP_PATH,
+    RESULTS_HEATMAP_PATH, HOURLY_STATION_HEATMAP_PATH, HOURLY_TRIP_ANIMATION_PATH
+)
 
 BASE_DATE = datetime(2025, 1, 1)
+
+def create_poi_distribution_map(system: BikeShareSystem):
+    """Generates a Folium map showing all POI types and neighborhood boundaries."""
+    if not system.stations: return
+    map_center = [system.stations[0].y, system.stations[0].x]
+    m = folium.Map(location=map_center, zoom_start=13, tiles="CartoDB positron")
+
+    colors = {
+        'home': 'blue', 'shops': 'red', 'edu': 'green', 'uni': 'purple',
+        'hospital': 'darkred', 'restaurant': 'orange', 'park': 'darkgreen',
+        'sport': 'cadetblue', 'station': 'black'
+    }
+
+    for poi_type, poi_list in sorted(system.poi_db.poi_data.items()):
+        if not poi_list: continue
+        fg = folium.FeatureGroup(name=poi_type.capitalize(), show=False).add_to(m)
+        color = colors.get(poi_type, 'gray')
+        
+        if 'geometry' in poi_list[0]:
+            for poi in poi_list:
+                folium.GeoJson(poi['geometry'], style_function=lambda _, c=color: {'fillColor': c, 'color': c}).add_to(fg)
+        else:
+            for poi in poi_list:
+                folium.CircleMarker(location=[poi['lat'], poi['lon']], radius=3, color=color, fill=True).add_to(fg)
+
+    try:
+        boundaries_gdf = gpd.read_file(NEIGHBORHOOD_AREAS_GEOJSON_PATH)
+        boundary_layer = folium.FeatureGroup(name='Neighborhood Boundaries', show=True).add_to(m)
+        folium.GeoJson(
+            boundaries_gdf,
+            style_function=lambda x: {'color': 'black', 'weight': 1, 'fillOpacity': 0.1},
+            tooltip=folium.GeoJsonTooltip(fields=['buurtnaam'])
+        ).add_to(boundary_layer)
+    except Exception as e:
+        print(f"Warning: Could not add neighborhood boundaries to map: {e}")
+
+    folium.LayerControl().add_to(m)
+    m.save(str(POI_MAP_PATH))
 
 def create_hourly_trip_animation_map(system: BikeShareSystem):
     """
@@ -42,7 +84,7 @@ def create_hourly_trip_animation_map(system: BikeShareSystem):
             'properties': {
                 'times': [timestamp_str] * len(walk_to_geom.coords),
                 'style': {'color': 'blue', 'weight': 2, 'opacity': 0.8, 'dashArray': '5, 5'},
-                'popup': f"Walk to Station (Trip started hour {start_hour})"
+                # 'popup': f"Walk to Station (Trip started hour {start_hour})"
             }
         })
 
@@ -75,7 +117,6 @@ def create_hourly_trip_animation_map(system: BikeShareSystem):
             'properties': {
                 'times': [timestamp_str] * len(walk_from_geom.coords),
                 'style': {'color': 'blue', 'weight': 2, 'opacity': 0.8, 'dashArray': '5, 5'},
-                'popup': f"Walk from Station (Trip started hour {start_hour})"
             }
         })
 
@@ -83,7 +124,7 @@ def create_hourly_trip_animation_map(system: BikeShareSystem):
     folium.plugins.TimestampedGeoJson(
         {'type': 'FeatureCollection', 'features': features},
         period='PT1H',
-        add_last_point=True,
+        add_last_point=False,
         auto_play=False,
         loop=False,
         duration='PT1M',
@@ -94,7 +135,7 @@ def create_hourly_trip_animation_map(system: BikeShareSystem):
     # Add station markers with toggleable feature groups
     station_feature_group = folium.FeatureGroup(name='Stations', show=True)
     for s in system.stations:
-        tooltip = folium.Tooltip(text=f"{s.neighbourhood}\nBikes: {s.bikes}\nCapacity: {s.capacity}")
+        tooltip = folium.Tooltip(text=f"{s.neighbourhood}\n")
         folium.Marker(
             location=[s.y, s.x],
             icon=folium.Icon(color='green', icon='bicycle', prefix='fa'),
@@ -106,163 +147,89 @@ def create_hourly_trip_animation_map(system: BikeShareSystem):
     map_filename = './generated/hourly_trip_animation.html'
     m.save(map_filename)
     print(f"Hourly trip animation map saved to '{map_filename}'")
-def create_poi_distribution_map(system: BikeShareSystem):
-    """
-    Generates a Folium map showing the distribution of all POI types
-    and the boundaries of the neighborhoods they were generated from.
-    """
-    print("Generating POI distribution map with neighborhood boundaries...")
-    
-    # Use the first station as a fallback center point
+
+def create_all_trip_paths_map(system: BikeShareSystem):
+    """Generates a Folium map showing the complete path of every successful trip."""
+    if not system.trip_log: return
     map_center = [system.stations[0].y, system.stations[0].x]
     m = folium.Map(location=map_center, zoom_start=13, tiles="CartoDB positron")
 
-    # Define colors for each POI type for consistency
-    colors = {
-        'home': 'blue', 'shops': 'red', 'edu': 'green', 'uni': 'purple',
-        'hospital': 'darkred', 'restaurant': 'orange', 'park': 'darkgreen',
-        'sport': 'cadetblue', 'station': 'black'
-    }
+    for station in system.stations:
+        folium.Marker(location=[station.y, station.x], icon=folium.Icon(color='green', icon='bicycle', prefix='fa'), tooltip=f"Station: {station.neighbourhood}").add_to(m)
 
-    # Add POI layers
-    for poi_type, poi_list in sorted(system.poi_db.poi_data.items()):
-        if not poi_list: continue
-        
-        feature_group = folium.FeatureGroup(name=poi_type.capitalize(), show=False)
-        
-        # Handle polygons (like 'uni') and points differently
-        if 'geometry' in poi_list[0]:
-            for poi in poi_list:
-                folium.GeoJson(
-                    poi['geometry'],
-                    style_function=lambda x, color=colors.get(poi_type, 'gray'): {
-                        'fillColor': color, 'color': color, 'weight': 2
-                    }
-                ).add_to(feature_group)
-        else:
-            for poi in poi_list:
-                folium.CircleMarker(
-                    location=[poi['lat'], poi['lon']], radius=3,
-                    color=colors.get(poi_type, 'gray'), fill=True, fill_opacity=0.7
-                ).add_to(feature_group)
-        
-        feature_group.add_to(m)
-
-    # Add neighborhood boundaries layer
-    try:
-        boundaries_gdf = gpd.read_file(NEIGHBORHOOD_AREAS_GEOJSON_PATH)
-        boundary_layer = folium.FeatureGroup(name='Neighborhood Boundaries', show=True)
-        folium.GeoJson(
-            boundaries_gdf,
-            style_function=lambda x: {'color': 'black', 'weight': 1, 'fillOpacity': 0.1},
-            tooltip=folium.GeoJsonTooltip(fields=['buurtnaam'])
-        ).add_to(boundary_layer)
-        boundary_layer.add_to(m)
-    except Exception as e:
-        print(f"Could not add neighborhood boundaries: {e}")
-
-    folium.LayerControl().add_to(m)
-    map_filename =  './generated/poi_and_boundaries_map.html'
-    m.save(map_filename)
-    print(f"POI distribution map saved to '{map_filename}'")
-
-
-def create_trip_path_map(system: BikeShareSystem):
-    """
-    Generates a Folium map showing the complete path of every successful trip.
-    """
-    print("Generating detailed trip path map...")
-    if not system.trip_log:
-        print("No trips were logged, skipping map generation."); return
-
-    map_center = [system.stations[0].y, system.stations[0].x]
-    m = folium.Map(location=map_center, zoom_start=13,  tiles="CartoDB positron")
-
-    for s in system.stations:
-        tooltip = folium.Tooltip(text=f"Station {s.id}\n{s.bikes}/{s.capacity} available")
-        folium.Marker(location=[s.y, s.x], icon=folium.Icon(color='green', icon='bicycle', prefix='fa'), tooltip=tooltip).add_to(m)
+    walk_paths = folium.FeatureGroup(name="Walking Paths", show=False).add_to(m)
+    bike_paths = folium.FeatureGroup(name="Cycling Paths", show=True).add_to(m)
 
     for trip in system.trip_log:
-        folium.PolyLine(locations=[(trip['user_origin'][1], trip['user_origin'][0]), (trip['origin_station'][1], trip['origin_station'][0])], color='blue', weight=2, opacity=0.8, dash_array='5, 5').add_to(m)
-        folium.PolyLine(locations=[(trip['dest_station'][1], trip['dest_station'][0]), (trip['user_destination'][1], trip['user_destination'][0])], color='blue', weight=2, opacity=0.8, dash_array='5, 5').add_to(m)
+        walk_to_coords = [(p[1], p[0]) for p in [trip['user_origin'], trip['origin_station']]]
+        walk_from_coords = [(p[1], p[0]) for p in [trip['dest_station'], trip['user_destination']]]
+        folium.PolyLine(walk_to_coords, color='blue', weight=2.5, opacity=0.8, dash_array='5').add_to(walk_paths)
+        folium.PolyLine(walk_from_coords, color='blue', weight=2.5, opacity=0.8, dash_array='5').add_to(walk_paths)
+        
         if trip.get('route_geometry'):
-            folium.GeoJson(trip['route_geometry'], style_function=lambda x: {'color': 'red', 'weight': 3}).add_to(m)
+            folium.GeoJson(trip['route_geometry'], style_function=lambda x: {'color': 'red', 'weight': 3}).add_to(bike_paths)
             
-    map_filename = './generated/all_trip_paths.html'
-    m.save(map_filename)
-    print(f"Detailed trip path map saved to '{map_filename}'")
+    folium.LayerControl().add_to(m)
+    m.save(str(ALL_TRIP_PATHS_MAP_PATH))
 
 def create_results_heatmap(system: BikeShareSystem):
-    """
-    Generates a heatmap of route and station usage.
-    """
-    print("Generating results heatmap...")
-    route_geometries = [system.station_routes[route]['geometry'] for route, usage in system.route_usage.items() if usage > 0 and system.station_routes.get(route) and system.station_routes[route].get('geometry') for _ in range(usage)]
-    if not route_geometries:
-        print("No routes were used, skipping heatmap visualization."); return
+    """Generates a heatmap image of route and station usage."""
+    route_geometries = [
+        geom for route, usage in system.route_usage.items()
+        if usage > 0 and (geom := system.station_routes.get(route, {}).get('geometry'))
+        for _ in range(usage)
+    ]
+    if not route_geometries: return
 
     routes_gdf = gpd.GeoDataFrame(geometry=route_geometries, crs="EPSG:4326")
-    stations_gdf = gpd.GeoDataFrame(geometry=[Point(s.x, s.y) for s in system.stations], crs="EPSG:4326")
-    stations_gdf['usage'] = [system.station_usage.get(s.id, 0) for s in system.stations]
+    stations_gdf = gpd.GeoDataFrame(
+        data=[(system.station_usage.get(s.id, 0),) for s in system.stations],
+        geometry=[Point(s.x, s.y) for s in system.stations],
+        columns=['usage'], crs="EPSG:4326"
+    )
 
-    fig, ax = plt.subplots(figsize=(15, 15))
-    routes_gdf.to_crs(epsg=3857).plot(ax=ax, color='crimson', linewidth=0.5, alpha=0.1)
-    markersize = stations_gdf['usage'].apply(lambda x: x * 5 + 10)
+    fig, ax = plt.subplots(figsize=(12, 12))
+    routes_gdf.to_crs(epsg=3857).plot(ax=ax, color='crimson', linewidth=0.5, alpha=0.15)
+    markersize = stations_gdf['usage'].apply(lambda x: max(x * 4, 10))
     stations_gdf.to_crs(epsg=3857).plot(ax=ax, marker='o', color='skyblue', edgecolor='black', markersize=markersize, alpha=0.9)
 
     cx.add_basemap(ax, source=cx.providers.CartoDB.Positron)
     ax.set_axis_off()
-    heatmap_path = './generated/simulation_results_heatmap.png'
-    plt.savefig(heatmap_path, dpi=300, bbox_inches='tight', pad_inches=0.1)
-    print(f"Results heatmap saved to '{heatmap_path}'")
+    plt.savefig(str(RESULTS_HEATMAP_PATH), dpi=200, bbox_inches='tight', pad_inches=0.1)
+    plt.close(fig)
 
 def create_hourly_station_heatmap(system: BikeShareSystem):
-    """
-    Generates a heatmap showing station usage by hour.
-    """
-    print("Generating hourly station usage heatmap...")
-    if not system.trip_log:
-        print("No trips were logged, skipping heatmap generation."); return
-
-    # Create a DataFrame with hourly usage for each station
-    hourly_usage = {s.id: [0] * 24 for s in system.stations}
+    """Generates a heatmap image showing station trip activity by hour."""
+    if not system.trip_log: return
+    
+    station_map = {s.id: s.neighbourhood for s in system.stations}
+    station_ids = list(station_map.keys())
+    hourly_usage = {s_id: [0] * 24 for s_id in station_ids}
     
     for trip in system.trip_log:
-        hour = int((trip['start_time'] / 60) % 24)
-        # Get station IDs from coordinates
-        origin_station = next(s for s in system.stations if (s.x, s.y) == trip['origin_station'])
-        dest_station = next(s for s in system.stations if (s.x, s.y) == trip['dest_station'])
-        hourly_usage[origin_station.id][hour] += 1
-        hourly_usage[dest_station.id][hour] += 1
+        hour = int(trip['start_time'] / 60) % 24
+        origin = next((s for s in system.stations if (s.x, s.y) == trip['origin_station']), None)
+        dest = next((s for s in system.stations if (s.x, s.y) == trip['dest_station']), None)
+        if origin: hourly_usage[origin.id][hour] += 1
+        if dest: hourly_usage[dest.id][hour] += 1
 
-    # Create the heatmap
-    fig, ax = plt.subplots(figsize=(15, 8))
-    data = np.array([hourly_usage[s.id] for s in system.stations])
-    im = ax.imshow(data, cmap='YlOrRd')
+    data = np.array([hourly_usage[s_id] for s_id in station_ids])
+    if data.sum() == 0: return
 
-    # Add labels
+    fig, ax = plt.subplots(figsize=(16, max(8, len(station_map) * 0.4)))
+    im = ax.imshow(data, cmap='YlOrRd', aspect='auto')
+
     ax.set_xticks(np.arange(24))
-    ax.set_yticks(np.arange(len(system.stations)))
+    ax.set_yticks(np.arange(len(station_map)))
     ax.set_xticklabels([f"{h:02d}:00" for h in range(24)])
-    ax.set_yticklabels([s.neighbourhood for s in system.stations])
+    ax.set_yticklabels([station_map[s_id] for s_id in station_ids])
 
-    # Rotate x-axis labels
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
-
-    # Add colorbar
-    cbar = ax.figure.colorbar(im, ax=ax)
-    cbar.ax.set_ylabel("Number of Trips", rotation=-90, va="bottom")
-
-    # Add title and labels
-    ax.set_title("Station Usage by Hour")
-    ax.set_xlabel("Hour of Day")
-    ax.set_ylabel("Station")
-
-    # Adjust layout
-    plt.tight_layout()
     
-    # Save the figure
-    heatmap_path = './generated/hourly_station_heatmap.png'
-    plt.savefig(heatmap_path, dpi=300, bbox_inches='tight')
-    print(f"Hourly station heatmap saved to '{heatmap_path}'")
-    plt.close()
+    cbar = ax.figure.colorbar(im, ax=ax, fraction=0.02, pad=0.04)
+    cbar.ax.set_ylabel("Number of Trips", rotation=-90, va="bottom")
+    ax.set_title("Station Activity by Hour of Day")
+
+    plt.tight_layout()
+    plt.savefig(str(HOURLY_STATION_HEATMAP_PATH), dpi=150, bbox_inches='tight')
+    plt.close(fig)
