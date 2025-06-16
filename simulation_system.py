@@ -1,85 +1,120 @@
 # simulation_system.py
 
 import random
-import os
 import json
 import pickle
+import simpy
 import osmnx as ox
 import geopandas as gpd
 import networkx as nx
 from typing import Dict, Tuple, Optional, List
 
 from data_models import Station, User
-from utils import POIDatabase, WeightManager, haversine_distance, get_osmnx_graph, get_random_point_in_polygon, get_file_md5
+from utils import (
+    POIDatabase, WeightManager, haversine_distance, get_osmnx_graph,
+    get_random_point_in_polygon, get_file_md5, OpenRouteServiceClient
+)
 from config import (
-    POI_DATABASE_PATH, STATION_GEOJSON_PATH, GRAPH_FILE_PATH, CITY_QUERY,
-    STATION_ROUTES_CACHE_PATH, STATION_ROUTES_META_PATH
+    CITY_QUERY, STATION_GEOJSON_PATH, GRAPH_FILE_PATH,
+    STATION_ROUTES_CACHE_PATH, STATION_ROUTES_META_PATH,
+    CYCLING_SPEED_KMPH, WALKING_SPEED_KMPH
 )
 
 class BikeShareSystem:
+    """Manages the state and logic of the entire bike-sharing system."""
+
     def __init__(self):
         print("--- Initializing Bike Share System ---")
-        self.poi_db = POIDatabase(POI_DATABASE_PATH)
+        self.poi_db = POIDatabase()
         self.weights = WeightManager()
         self.graph = get_osmnx_graph(CITY_QUERY, GRAPH_FILE_PATH)
-        self.stations : List[Station] = self._create_stations_from_file()
-        self.station_routes = self._precompute_station_routes()
-        
+        self.stations: List[Station] = self._load_stations()
+        self.ors_client = OpenRouteServiceClient()
+        self.station_routes = self._precompute_or_load_station_routes()
+
+        # Simulation statistics
         self.stats = {
             "successful_trips": 0, "failed_trips": 0,
             "total_walking_distance": 0.0, "total_cycling_distance": 0.0
         }
-        self.trip_log = []
-        self.station_usage = {s.id: 0 for s in self.stations}
-        self.station_failures = {s.id: 0 for s in self.stations}  # Track failures per station
-        self.route_usage = {key: 0 for key in self.station_routes}
+        self.trip_log: List[Dict] = []
+        self.station_usage: Dict[int, int] = {s.id: 0 for s in self.stations}
+        self.station_failures: Dict[int, int] = {s.id: 0 for s in self.stations}
+        self.route_usage: Dict[Tuple[int, int], int] = {key: 0 for key in self.station_routes}
+        self.hourly_bike_counts: Dict[int, Dict[int, int]] = {}
 
-    def _create_stations_from_file(self) -> List[Station]:
+    def _load_stations(self) -> List[Station]:
+        """Loads station data from the GeoJSON file."""
         stations_gdf = gpd.read_file(STATION_GEOJSON_PATH)
-        stations : List[Station] = []
-        for index, row in stations_gdf.iterrows():
-            centroid = row.geometry.centroid
-            stations.append(Station(
-                id=index, x=centroid.x, y=centroid.y,
-                capacity=20, bikes=10, neighbourhood=row.get('name', f"Station_{index}")
-            ))
+        stations = [
+            Station(
+                id=index,
+                x=row.geometry.centroid.x,
+                y=row.geometry.centroid.y,
+                capacity=20,  # Default capacity
+                bikes=10,     # Default starting bikes
+                neighbourhood=row.get('name', f"Station_{index}")
+            )
+            for index, row in stations_gdf.iterrows()
+        ]
+        print(f"Loaded {len(stations)} stations.")
         return stations
 
-    def _precompute_station_routes(self) -> Dict[Tuple[int, int], Dict]:
-        """
-        Precomputes routes between stations. Loads from cache if the station
-        file has not changed, otherwise computes and saves to cache.
-        """
-        current_hash = get_file_md5(STATION_GEOJSON_PATH)
+    def _is_cache_valid(self) -> bool:
+        """Checks if the station routes cache is up-to-date."""
+        if not all(p.exists() for p in [STATION_ROUTES_CACHE_PATH, STATION_ROUTES_META_PATH]):
+            return False
         
         try:
-            if os.path.exists(STATION_ROUTES_CACHE_PATH) and os.path.exists(STATION_ROUTES_META_PATH):
-                with open(STATION_ROUTES_META_PATH, 'r') as f:
-                    meta_data = json.load(f)
-                if meta_data.get('station_file_hash') == current_hash:
-                    print("Loading station routes from cache...")
-                    with open(STATION_ROUTES_CACHE_PATH, 'rb') as f:
-                        return pickle.load(f)
-        except Exception as e:
-            print(f"Could not load from cache, will recompute. Reason: {e}")
+            with open(STATION_ROUTES_META_PATH, 'r') as f:
+                meta_data = json.load(f)
+            current_hash = get_file_md5(STATION_GEOJSON_PATH)
+            return meta_data.get('station_file_hash') == current_hash
+        except (json.JSONDecodeError, FileNotFoundError):
+            return False
+
+    def _precompute_or_load_station_routes(self) -> Dict[Tuple[int, int], Dict]:
+        """Loads station-to-station routes from cache or computes them if necessary."""
+        if self._is_cache_valid():
+            print("Loading station routes from cache...")
+            with open(STATION_ROUTES_CACHE_PATH, 'rb') as f:
+                return pickle.load(f)
 
         print("Cache invalid or not found. Precomputing station routes...")
         routes = {}
-        for origin in self.stations:
-            for dest in self.stations:
-                if origin.id == dest.id: continue
+        station_coords = [(s.x, s.y) for s in self.stations]
+        ors_matrix = self.ors_client.get_matrix(station_coords) if self.ors_client.client else None
+        if ors_matrix:
+            print("Using OpenRouteService for travel times and distances.")
+        else:
+            print("ORS client not available or failed. Using OSMnx estimates for travel times.")
+
+        for i, origin in enumerate(self.stations):
+            for j, dest in enumerate(self.stations):
+                if origin.id == dest.id:
+                    continue
                 try:
                     o_node = ox.nearest_nodes(self.graph, origin.x, origin.y)
                     d_node = ox.nearest_nodes(self.graph, dest.x, dest.y)
-                    path = ox.shortest_path(self.graph, o_node, d_node, weight='length')
-                    if path:
-                        # --- FIX: Removed the 'weight' argument ---
-                        route_gdf = ox.routing.route_to_gdf(self.graph, path)
-                        routes[(origin.id, dest.id)] = {
-                            'geometry': route_gdf.unary_union,
-                            'distance': route_gdf['length'].sum() / 1000,
-                            'duration': (route_gdf['length'].sum() / 1000) / 15 * 60
-                        }
+                    path_nodes = nx.shortest_path(self.graph, o_node, d_node, weight='length')
+                    
+                    if not path_nodes:
+                        continue
+
+                    route_gdf = ox.routing.route_to_gdf(self.graph, path_nodes)
+                    distance_km = route_gdf['length'].sum() / 1000
+                    
+                    if ors_matrix:
+                        distance_km = ors_matrix['distances'][i][j] / 1000
+                        duration_min = ors_matrix['durations'][i][j] / 60
+                    else:
+                        duration_min = (distance_km / CYCLING_SPEED_KMPH) * 60
+                    
+                    routes[(origin.id, dest.id)] = {
+                        'geometry': route_gdf.unary_union,
+                        'distance': distance_km,
+                        'duration': duration_min,
+                    }
                 except (nx.NetworkXNoPath, nx.NodeNotFound):
                     continue
         
@@ -87,49 +122,68 @@ class BikeShareSystem:
         with open(STATION_ROUTES_CACHE_PATH, 'wb') as f:
             pickle.dump(routes, f)
         with open(STATION_ROUTES_META_PATH, 'w') as f:
-            json.dump({'station_file_hash': current_hash}, f)
+            json.dump({'station_file_hash': get_file_md5(STATION_GEOJSON_PATH)}, f)
         
         return routes
 
+    def record_bike_counts_process(self, env: simpy.Environment):
+        """A simpy process that records bike counts at each station every hour."""
+        while True:
+            current_hour = int(env.now / 60)
+            self.hourly_bike_counts[current_hour] = {
+                station.id: station.bikes for station in self.stations
+            }
+            yield env.timeout(60)  # Wait for one simulation hour
+
     def generate_user(self, current_sim_time: float) -> Optional[User]:
+        """Generates a new user with an origin and destination based on POI weights."""
         hour = int((current_sim_time / 60) % 24)
         origin_type = self.weights.get_poi_type_for_hour(hour)
         dest_type = self.weights.get_poi_type_for_hour(hour)
 
-        origin_poi = self.poi_db.get_random_poi(origin_type)
-        dest_poi = self.poi_db.get_random_poi(dest_type)
+        try:
+            origin_poi = self.poi_db.get_random_poi(origin_type)
+            dest_poi = self.poi_db.get_random_poi(dest_type)
+        except (IndexError, KeyError):
+            # This can happen if a POI type has no entries in the database
+            return None
 
         origin_coords = get_random_point_in_polygon(origin_poi['geometry']) if 'geometry' in origin_poi else (origin_poi['lon'], origin_poi['lat'])
         dest_coords = get_random_point_in_polygon(dest_poi['geometry']) if 'geometry' in dest_poi else (dest_poi['lon'], dest_poi['lat'])
 
         return User(
-            id=random.randint(1000, 9999),
+            id=random.randint(10000, 99999),
             origin=origin_coords, destination=dest_coords,
             origin_type=origin_type, destination_type=dest_type
         )
 
-    def get_walking_info(self, start: tuple, end: tuple):
-        dist_km = haversine_distance(start, end)
-        return dist_km, (dist_km / 5.0) * 60
+    def get_walking_info(self, start_coords: tuple, end_coords: tuple) -> Tuple[float, float]:
+        """Calculates walking distance (km) and time (minutes)."""
+        dist_km = haversine_distance(start_coords, end_coords)
+        time_min = (dist_km / WALKING_SPEED_KMPH) * 60
+        return dist_km, time_min
 
-    def get_cycling_info(self, o_id: int, d_id: int):
-        route = self.station_routes.get((o_id, d_id))
+    def get_cycling_info(self, origin_station_id: int, dest_station_id: int) -> Tuple[float, float, Optional[object]]:
+        """Retrieves pre-computed cycling distance, time, and route geometry."""
+        route = self.station_routes.get((origin_station_id, dest_station_id))
         return (route['distance'], route['duration'], route['geometry']) if route else (0, 0, None)
 
-    def find_nearest_station_with_bike(self, loc: tuple):
-        available = [s for s in self.stations if s.has_bike()]
-        if not available:
-            # Track failure for all stations that were checked
-            for s in self.stations:
-                if not s.has_bike():
-                    self.station_failures[s.id] += 1
-        return min(available, key=lambda s: haversine_distance(loc, (s.x, s.y)), default=None)
+    def find_nearest_station_with_bike(self, location: tuple) -> Optional[Station]:
+        """Finds the closest station to a location that has at least one bike."""
+        available_stations = [s for s in self.stations if s.has_bike()]
+        if not available_stations:
+            for station in self.stations:
+                if not station.has_bike():
+                    self.station_failures[station.id] += 1
+            return None
+        return min(available_stations, key=lambda s: haversine_distance(location, (s.x, s.y)))
 
-    def find_nearest_station_with_space(self, loc: tuple):
-        available = [s for s in self.stations if s.has_space()]
-        if not available:
-            # Track failure for all stations that were checked
-            for s in self.stations:
-                if not s.has_space():
-                    self.station_failures[s.id] += 1
-        return min(available, key=lambda s: haversine_distance(loc, (s.x, s.y)), default=None)
+    def find_nearest_station_with_space(self, location: tuple) -> Optional[Station]:
+        """Finds the closest station to a location that has at least one empty dock."""
+        available_stations = [s for s in self.stations if s.has_space()]
+        if not available_stations:
+            for station in self.stations:
+                if not station.has_space():
+                    self.station_failures[station.id] += 1
+            return None
+        return min(available_stations, key=lambda s: haversine_distance(location, (s.x, s.y)))

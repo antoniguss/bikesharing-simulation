@@ -1,26 +1,40 @@
 # config.py
+from pathlib import Path
 
 # --- Simulation Parameters ---
-SIMULATION_DURATION = 24 * 60      # Total simulation time in minutes
-SIMULATION_START_TIME = 6 * 60
+SIMULATION_DURATION = 24 * 60  # Total simulation time in minutes
+SIMULATION_START_TIME = 6 * 60   # Simulation start time in minutes from midnight (e.g., 6 * 60 for 6:00 AM)
+MAX_TOTAL_WALK_DISTANCE_KM = 1.0 # Maximum total walking distance for a trip (to and from stations)
 
+# --- Physical Constants ---
+WALKING_SPEED_KMPH = 5.0
+CYCLING_SPEED_KMPH = 15.0
 
-MAX_TOTAL_WALK_DISTANCE_KM = 1.0 # 1 KM walking max
+# --- Path Configuration ---
+BASE_DIR = Path(__file__).parent
+DATA_DIR = BASE_DIR / 'data'
+CACHE_DIR = BASE_DIR / 'cache'
+GENERATED_DIR = BASE_DIR / 'generated'
 
-# --- Data & Model Paths (Updated with new cache paths) ---
-# Cached data that can be regenerated
-POI_DATABASE_PATH = './cache/poi_database.json'
-GRAPH_FILE_PATH = './cache/eindhoven_bike_network.graphml'
-STATION_ROUTES_CACHE_PATH = './cache/station_routes.pkl'
-STATION_ROUTES_META_PATH = './cache/station_routes_meta.json' # Stores a hash to check if the station file has changed
+# Source Data (must exist)
+NEIGHBORHOOD_AREAS_GEOJSON_PATH = DATA_DIR / 'neighbourhoods.geojson'
+STATION_GEOJSON_PATH = DATA_DIR / 'ev_stations.geojson'
+POI_WEIGHTS_PATH = DATA_DIR / 'poi_weights.csv'
+TIME_WEIGHTS_PATH = DATA_DIR / 'time_weights.csv'
 
-# Source data that must exist
-NEIGHBORHOOD_AREAS_GEOJSON_PATH = './data/neighbourhoods.geojson' 
-STATION_GEOJSON_PATH = './data/ev_stations.geojson'
-POI_WEIGHTS_PATH = './data/poi_weights.csv'
-TIME_WEIGHTS_PATH = './data/time_weights.csv'
+# Cached Data (can be regenerated)
+POI_DATABASE_PATH = CACHE_DIR / 'poi_database.json'
+GRAPH_FILE_PATH = CACHE_DIR / 'eindhoven_bike_network.graphml'
+STATION_ROUTES_CACHE_PATH = CACHE_DIR / 'station_routes.pkl'
+STATION_ROUTES_META_PATH = CACHE_DIR / 'station_routes_meta.json'
 
-GENERATED_DIR = './generated'
+# Generated Output
+CONSOLE_OUTPUT_PATH = GENERATED_DIR / 'console_output.txt'
+HOURLY_TRIP_ANIMATION_PATH = GENERATED_DIR / 'hourly_trip_animation.html'
+ALL_TRIP_PATHS_MAP_PATH = GENERATED_DIR / 'all_trip_paths.html'
+RESULTS_HEATMAP_PATH = GENERATED_DIR / 'simulation_results_heatmap.png'
+HOURLY_STATION_HEATMAP_PATH = GENERATED_DIR / 'hourly_station_heatmap.png'
+POI_MAP_PATH = GENERATED_DIR / 'poi_and_boundaries_map.html'
 
 # --- Geographic Configuration ---
 CITY_QUERY = "Eindhoven, Netherlands"
