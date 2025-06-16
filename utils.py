@@ -201,3 +201,19 @@ class OpenRouteServiceClient:
         except Exception as e:
             print(f"Error fetching ORS matrix: {e}")
             return None
+
+    def optimize_rebalancing_route(self, stations: List[Tuple[float, float]]) -> Optional[Dict]:
+        """Optimizes the order of stations to visit for rebalancing."""
+        if not self.client or not stations:
+            return None
+        try:
+            coords = [[lon, lat] for lon, lat in stations]
+            return self.client.directions(
+                coordinates=coords,
+                profile='cycling-regular',
+                optimize_waypoints=True,
+                format='geojson'
+            )
+        except Exception as e:
+            print(f"Error optimizing rebalancing route: {e}")
+            return None

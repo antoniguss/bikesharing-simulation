@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 import contextily as cx
 from shapely.geometry import Point, LineString, MultiLineString, mapping
 from datetime import datetime, timedelta
+from typing import Dict, List
+from data_models import Station
 
 import config
 from simulation_system import BikeShareSystem
@@ -267,3 +269,35 @@ def create_hourly_station_heatmap(system: BikeShareSystem):
     plt.tight_layout()
     plt.savefig(str(config.HOURLY_STATION_HEATMAP_PATH), dpi=150, bbox_inches='tight')
     plt.close(fig)
+
+def create_rebalancing_route_map(system: BikeShareSystem, route_data: Dict, stations_to_visit: List[Station]) -> None:
+    """Creates a map visualization of the optimized rebalancing route."""
+    if not route_data or not stations_to_visit: return
+    
+    map_center = [system.stations[0].y, system.stations[0].x]
+    m = folium.Map(location=map_center, zoom_start=13, tiles="CartoDB positron")
+
+    # Add the optimized route
+    folium.GeoJson(
+        route_data,
+        style_function=lambda x: {'color': 'red', 'weight': 4, 'opacity': 0.7}
+    ).add_to(m)
+
+    # Add station markers
+    for i, station in enumerate(stations_to_visit, 1):
+        fill_ratio = station.bikes / station.capacity
+        color = '#d9534f' if fill_ratio < 0.3 else '#0275d8'  # Red for low, Blue for high
+        reason = "Low bikes" if fill_ratio < 0.3 else "High bikes"
+        
+        folium.CircleMarker(
+            location=[station.y, station.x],
+            radius=8,
+            color='black',
+            weight=1,
+            fill=True,
+            fill_color=color,
+            fill_opacity=0.9,
+            popup=f"#{i}: {station.neighbourhood}<br>Bikes: {station.bikes}/{station.capacity}<br>Reason: {reason}"
+        ).add_to(m)
+
+    m.save(str(config.REBALANCING_ROUTE_MAP_PATH))

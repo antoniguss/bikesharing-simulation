@@ -36,6 +36,7 @@ ALL_TRIP_PATHS_MAP_PATH = GENERATED_DIR / 'all_trip_paths.html'
 RESULTS_HEATMAP_PATH = GENERATED_DIR / 'simulation_results_heatmap.png'
 HOURLY_STATION_HEATMAP_PATH = GENERATED_DIR / 'hourly_station_heatmap.png'
 POI_MAP_PATH = GENERATED_DIR / 'poi_and_boundaries_map.html'
+REBALANCING_ROUTE_MAP_PATH = GENERATED_DIR / 'rebalancing_route.html'
 
 # --- Geographic Configuration ---
 CITY_QUERY = "Eindhoven, Netherlands"

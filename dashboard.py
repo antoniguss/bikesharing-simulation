@@ -96,8 +96,8 @@ else:
         col2.metric("Failed Trips", f"{stats['failed_trips']:,}")
         col3.metric("Success Rate", f"{success_rate:.1f}%")
 
-        tabs = ["Station Data", "Trip Animation", "Station Availability", "All Trip Paths", "Heatmaps", "POI Distribution", "Logs"]
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(tabs)
+        tabs = ["Station Data", "Trip Animation", "Station Availability", "All Trip Paths", "Heatmaps", "POI Distribution", "Logs", "Rebalancing Route"]
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs(tabs)
 
         with tab1:
             st.subheader("Hourly Bike Availability per Station")
@@ -178,3 +178,51 @@ else:
                     st.code(f.read(), language="text")
             except FileNotFoundError:
                 st.warning("Console output file not found.")
+
+        with tab8:
+            st.subheader("Rebalancing Route Optimization")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                low_threshold = st.slider("Low Bike Threshold (%)", 0, 50, 30)
+            with col2:
+                high_threshold = st.slider("High Bike Threshold (%)", 50, 100, 70)
+
+            if st.button("Calculate Rebalancing Route"):
+                stations_to_visit = []
+                for station in bike_system.stations:
+                    fill_ratio = station.bikes / station.capacity
+                    if fill_ratio < (low_threshold / 100) or fill_ratio > (high_threshold / 100):
+                        stations_to_visit.append(station)
+
+                if not stations_to_visit:
+                    st.info("No stations need rebalancing with current thresholds.")
+                else:
+                    # Get coordinates for route optimization
+                    station_coords = [(s.x, s.y) for s in stations_to_visit]
+                    route_data = bike_system.ors_client.optimize_rebalancing_route(station_coords)
+
+                    if route_data:
+                        from visualizations import create_rebalancing_route_map
+                        create_rebalancing_route_map(bike_system, route_data, stations_to_visit)
+                        
+                        # Display the route map
+                        display_html_file(config.REBALANCING_ROUTE_MAP_PATH)
+                        
+                        # Display station visit order
+                        st.subheader("Station Visit Order")
+                        visit_data = []
+                        for i, station in enumerate(stations_to_visit, 1):
+                            fill_ratio = station.bikes / station.capacity
+                            reason = "Low bikes" if fill_ratio < (low_threshold / 100) else "High bikes"
+                            visit_data.append({
+                                "Order": i,
+                                "Station": station.neighbourhood,
+                                "Current Bikes": station.bikes,
+                                "Capacity": station.capacity,
+                                "Fill Ratio": f"{fill_ratio:.1%}",
+                                "Reason": reason
+                            })
+                        st.dataframe(pd.DataFrame(visit_data), use_container_width=True)
+                    else:
+                        st.error("Failed to calculate optimized route. Please check your ORS API key.")
