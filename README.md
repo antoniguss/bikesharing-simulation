@@ -9,6 +9,8 @@ The key questions it helps answer are:
 - How often do trips fail due to no available bikes?
 - How often do trips fail because a station is full?
 - What are the most common travel routes?
+- How does bike availability change throughout the day?
+- What is the optimal route for rebalancing bikes between stations?
 
 ## Implementation
 
@@ -22,30 +24,53 @@ Users in our simulation are managed by **[SimPy][4]**, a library for running eve
 
 A user's journey follows these steps:
 
-1.Walk to the nearest station with an available bike.
-2.Take a bike and cycle to the station nearest their destination.
-3.Return the bike and walk to their final destination.
+1. Walk to the nearest station with an available bike.
+2. Take a bike and cycle to the station nearest their destination.
+3. Return the bike and walk to their final destination.
 
 A trip is marked as failed if there are no bikes, the destination station is full, or if the user has to walk too far (based on a predefined threshold).
 
+### Interactive Dashboard
+
+The simulation includes a **[Streamlit][8]**-based dashboard that provides:
+
+- Interactive parameter configuration (simulation duration, start time)
+- POI and time weight adjustments
+- Real-time simulation results
+- Multiple visualization tabs:
+  - Station data and hourly bike availability
+  - Trip animations
+  - Station availability animations
+  - All trip paths
+  - Route usage heatmaps
+  - POI distribution
+  - Console logs
+  - Rebalancing route optimization
+
 ### Visualization of results
 
-After the simulation runs, we create two maps to understand the results.
+The system generates several types of visualizations:
 
-First, we can generate an interactive map using **[Folium][5]** that shows the specific path of every single successful trip. This includes the user's walk to the station, the bike ride, and their final walk to the destination. This helps us see the complete door-to-door journey for our users.
+1. Interactive maps using **[Folium][5]** showing:
+   - Complete trip paths (walking + cycling)
+   - Hourly trip animations
+   - Station availability over time
+   - POI distribution
+   - Optimized rebalancing routes
 
-Second, we create a heatmap image using **[Matplotlib][6]** and **[Contextily][7]**. On this map:
+2. Static visualizations using **[Matplotlib][6]** and **[Contextily][7]**:
+   - Route usage heatmaps
+   - Hourly station activity heatmaps
 
-- **Routes** are drawn with transparency, so more frequently used routes appear darker and thicker.
-- **Stations** are shown as circles where the size depends on how busy the station was.
+### Statistics and Analysis
 
-### Statistics
+The simulation tracks and analyzes:
 
-The simulation tracks key data to measure performance. After it finishes, we analyze:
-
-- The final count of successful vs. failed trips, giving us a system success rate.
-- The usage count for each station, which helps identify "hotspots" (busy stations) and "coldspots" (ignored stations).
-- The usage count for each route, showing the most important travel corridors between stations.
+- Success/failure rates for trips
+- Station usage patterns
+- Route popularity
+- Hourly bike availability per station
+- Optimal rebalancing routes based on station fill levels
 
 [1]: https://www.openstreetmap.org/ "OpenStreetMap Homepage"
 [2]: https://osmnx.readthedocs.io/ "OSMnx Documentation"
@@ -54,3 +79,4 @@ The simulation tracks key data to measure performance. After it finishes, we ana
 [5]: https://python-visualization.github.io/folium/ "Folium Documentation"
 [6]: https://matplotlib.org/ "Matplotlib Homepage"
 [7]: https://contextily.readthedocs.io/ "Contextily Documentation"
+[8]: https://streamlit.io/ "Streamlit Homepage"
