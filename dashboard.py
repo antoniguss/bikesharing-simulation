@@ -65,58 +65,36 @@ if st.sidebar.button("Run Simulation"):
         config.SIMULATION_DURATION = duration_hours * 60
         config.SIMULATION_START_TIME = start_time_hours * 60
         
-        # Run simulation
-        run_simulation()
+        # Run simulation and store the returned system object
+        bike_system_result = run_simulation()
         st.session_state.simulation_run = True
-        st.session_state.bike_system = BikeShareSystem()  # Store the bike system in session state
+        st.session_state.bike_system = bike_system_result
         st.success("Simulation completed!")
 
 # Only show results if simulation has been run
 if st.session_state.simulation_run:
     st.header("Simulation Results")
+    
+    bike_system = st.session_state.get('bike_system')
 
-    # Create summary metrics
-    if os.path.exists('./generated/console_output.txt'):
-        with open('./generated/console_output.txt', 'r') as f:
-            console_output = f.read()
-            
-            # Extract key metrics using regex
-            successful_trips = re.search(r"Successful trips: (\d+)", console_output)
-            failed_trips = re.search(r"Failed trips: (\d+)", console_output)
-            success_rate = re.search(r"Success rate: ([\d.]+)%", console_output)
-            
-            # Create metrics columns
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Successful Trips", successful_trips.group(1) if successful_trips else "0")
-            with col2:
-                st.metric("Failed Trips", failed_trips.group(1) if failed_trips else "0")
-            with col3:
-                st.metric("Success Rate", f"{success_rate.group(1)}%" if success_rate else "0%")
-            
-            # Extract station statistics and create DataFrames
-            station_usage = []
-            for line in console_output.split('\n'):
-                if "Station" in line and "trips" in line:
-                    parts = line.split(": ")
-                    station_usage.append({
-                        "Station": parts[0].replace("Station ", ""),
-                        "Trips": int(parts[1].split()[0])
-                    })
-            
-            # Create DataFrame and sort
-            usage_df = pd.DataFrame(station_usage).sort_values("Trips", ascending=False)
-            
-            # Display station statistics in table
-            st.subheader("Most Used Stations")
-            st.dataframe(usage_df, use_container_width=True)
-            
-            # Add collapsible console output
-            with st.expander("View Console Output"):
-                st.code(console_output, language="text")
+    # Create summary metrics directly from the simulation object
+    if bike_system:
+        stats = bike_system.stats
+        total_trips = stats["successful_trips"] + stats["failed_trips"]
+        success_rate = (stats["successful_trips"] / total_trips * 100 if total_trips > 0 else 0)
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Successful Trips", stats['successful_trips'])
+        with col2:
+            st.metric("Failed Trips", stats['failed_trips'])
+        with col3:
+            st.metric("Success Rate", f"{success_rate:.1f}%")
+    else:
+        st.warning("Simulation data not found. Please run the simulation again.")
 
     # Create tabs for different visualizations
-    tab1, tab2, tab3, tab4 = st.tabs(["Trip Animation", "Trip Paths", "Heatmaps", "POI Distribution"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Trip Animation", "Trip Paths", "Heatmaps", "POI Distribution", "Station Data"])
 
     with tab1:
         st.subheader("Hourly Trip Animation")
@@ -146,6 +124,47 @@ if st.session_state.simulation_run:
         if os.path.exists('./generated/poi_and_boundaries_map.html'):
             with open('./generated/poi_and_boundaries_map.html', 'r') as f:
                 components.html(f.read(), height=600)
+    
+    with tab5:
+        st.subheader("Most Used Stations")
+        if bike_system:
+            station_map = {s.id: s.neighbourhood for s in bike_system.stations}
+            usage_data = [
+                {"Station": station_map.get(s_id, f"ID_{s_id}"), "Trips": trips}
+                for s_id, trips in bike_system.station_usage.items()
+            ]
+            usage_df = pd.DataFrame(usage_data).sort_values("Trips", ascending=False, ignore_index=True)
+            st.dataframe(usage_df, use_container_width=True)
+            
+            st.subheader("Hourly Bike Count per Station")
+            if bike_system.hourly_bike_counts:
+                # Prepare data for DataFrame
+                df = pd.DataFrame(bike_system.hourly_bike_counts)
+                
+                # Map index from station ID to station name
+                df.index = df.index.map(station_map)
+                df.index.name = "Station"
+                
+                # Sort rows by station name and columns by hour
+                df.sort_index(inplace=True)
+                df = df.reindex(sorted(df.columns), axis=1)
+                
+                # Format column headers to be human-readable (e.g., 06:00, 14:00)
+                df.columns = [f"{(hour % 24):02d}:00" for hour in df.columns]
+                
+                # Display the table
+                st.dataframe(df, use_container_width=True)
+            else:
+                st.info("No hourly bike count data available (simulation might have been too short).")
+        else:
+            st.warning("Could not load station data from the simulation.")
+            
+        with st.expander("View Raw Console Output"):
+            if os.path.exists('./generated/console_output.txt'):
+                with open('./generated/console_output.txt', 'r') as f:
+                    st.code(f.read(), language="text")
+            else:
+                st.info("Console output file not found.")
 
 else:
-    st.info("Configure simulation parameters and click 'Run Simulation' to start.") 
+    st.info("Configure simulation parameters and click 'Run Simulation' to start.")

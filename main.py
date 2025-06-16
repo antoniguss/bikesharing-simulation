@@ -32,6 +32,7 @@ def run_simulation():
     print("Starting simulation...")
     
     env.process(user_generator(env, bike_system))
+    env.process(bike_system.record_bike_counts_process(env)) # New: Start the bike recorder process
     env.run(until=SIMULATION_START_TIME + SIMULATION_DURATION)
 
     print("-" * 70)
@@ -70,6 +71,8 @@ def run_simulation():
     
     # Restore stdout
     sys.stdout = old_stdout
+
+    return bike_system # New: Return the completed system object
 
 if __name__ == "__main__":
     run_simulation()

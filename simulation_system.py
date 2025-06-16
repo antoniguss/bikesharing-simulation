@@ -8,6 +8,7 @@ import osmnx as ox
 import geopandas as gpd
 import networkx as nx
 from typing import Dict, Tuple, Optional, List
+import simpy
 
 from data_models import Station, User
 from utils import POIDatabase, WeightManager, haversine_distance, get_osmnx_graph, get_random_point_in_polygon, get_file_md5, OpenRouteServiceClient
@@ -34,6 +35,7 @@ class BikeShareSystem:
         self.station_usage = {s.id: 0 for s in self.stations}
         self.station_failures = {s.id: 0 for s in self.stations}
         self.route_usage = {key: 0 for key in self.station_routes}
+        self.hourly_bike_counts = {} # New: To store bike counts per hour
 
     def _create_stations_from_file(self) -> List[Station]:
         stations_gdf = gpd.read_file(STATION_GEOJSON_PATH)
@@ -110,6 +112,19 @@ class BikeShareSystem:
             json.dump({'station_file_hash': current_hash}, f)
         
         return routes
+    
+    def record_bike_counts_process(self, env: simpy.Environment):
+        """A simpy process that records the number of bikes at each station every hour."""
+        while True:
+            # The hour is based on simulation time
+            current_hour = int(env.now / 60)
+            
+            self.hourly_bike_counts[current_hour] = {
+                station.id: station.bikes for station in self.stations
+            }
+            
+            # Wait for one simulation hour (60 minutes)
+            yield env.timeout(60)
 
     def generate_user(self, current_sim_time: float) -> Optional[User]:
         hour = int((current_sim_time / 60) % 24)
