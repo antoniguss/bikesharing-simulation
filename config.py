@@ -3,7 +3,7 @@ from pathlib import Path
 
 # --- Simulation Parameters ---
 SIMULATION_DURATION = 24 * 60  # Total simulation time in minutes
-SIMULATION_START_TIME = 6 * 60   # Simulation start time in minutes from midnight (e.g., 6 * 60 for 6:00 AM)
+SIMULATION_START_TIME = 0 * 60   # Simulation start time in minutes from midnight (e.g., 6 * 60 for 6:00 AM)
 MAX_TOTAL_WALK_DISTANCE_KM = 1.0 # Maximum total walking distance for a trip (to and from stations)
 
 # --- Physical Constants ---
@@ -31,6 +31,7 @@ STATION_ROUTES_META_PATH = CACHE_DIR / 'station_routes_meta.json'
 # Generated Output
 CONSOLE_OUTPUT_PATH = GENERATED_DIR / 'console_output.txt'
 HOURLY_TRIP_ANIMATION_PATH = GENERATED_DIR / 'hourly_trip_animation.html'
+STATION_AVAILABILITY_ANIMATION_PATH = GENERATED_DIR / 'station_availability_animation.html'
 ALL_TRIP_PATHS_MAP_PATH = GENERATED_DIR / 'all_trip_paths.html'
 RESULTS_HEATMAP_PATH = GENERATED_DIR / 'simulation_results_heatmap.png'
 HOURLY_STATION_HEATMAP_PATH = GENERATED_DIR / 'hourly_station_heatmap.png'

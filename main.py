@@ -4,8 +4,7 @@ import sys
 from io import StringIO
 import simpy
 
-from config import (SIMULATION_DURATION, SIMULATION_START_TIME, CACHE_DIR,
-                    GENERATED_DIR, CONSOLE_OUTPUT_PATH)
+import config  # Import the module directly
 from simulation_system import BikeShareSystem
 from simulation_processes import user_generator
 import visualizations
@@ -53,10 +52,11 @@ def run_simulation() -> BikeShareSystem:
 
     print("=== Bike-Sharing System Simulation ===")
     
-    CACHE_DIR.mkdir(exist_ok=True)
-    GENERATED_DIR.mkdir(exist_ok=True)
+    config.CACHE_DIR.mkdir(exist_ok=True)
+    config.GENERATED_DIR.mkdir(exist_ok=True)
     
-    env = simpy.Environment(initial_time=SIMULATION_START_TIME)
+    # Use config variables via the module object to get the latest values
+    env = simpy.Environment(initial_time=config.SIMULATION_START_TIME)
     bike_system = BikeShareSystem()
     
     visualizations.create_poi_distribution_map(bike_system)
@@ -65,22 +65,24 @@ def run_simulation() -> BikeShareSystem:
     
     env.process(user_generator(env, bike_system))
     env.process(bike_system.record_bike_counts_process(env))
-    env.run(until=SIMULATION_START_TIME + SIMULATION_DURATION)
+    env.run(until=config.SIMULATION_START_TIME + config.SIMULATION_DURATION)
     print("Simulation finished.")
 
     print_simulation_summary(bike_system)
     
+    print("Generating visualizations...")
     if bike_system.stats["successful_trips"] > 0:
-        print("Generating visualizations...")
         visualizations.create_all_trip_paths_map(bike_system)
         visualizations.create_results_heatmap(bike_system)
         visualizations.create_hourly_trip_animation_map(bike_system)
         visualizations.create_hourly_station_heatmap(bike_system)
-        print("Visualizations created successfully.")
     else:
-        print("No successful trips to visualize.")
+        print("No successful trips to visualize, skipping trip-based maps.")
+    
+    visualizations.create_station_availability_animation_map(bike_system)
+    print("Visualizations created successfully.")
 
-    with open(CONSOLE_OUTPUT_PATH, 'w') as f:
+    with open(config.CONSOLE_OUTPUT_PATH, 'w') as f:
         f.write(captured_output.getvalue())
     
     sys.stdout = old_stdout
