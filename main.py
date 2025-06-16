@@ -2,12 +2,19 @@
 
 import simpy
 from pathlib import Path
+import sys
+from io import StringIO
 from config import SIMULATION_DURATION, SIMULATION_START_TIME
 from simulation_system import BikeShareSystem
 from simulation_processes import user_generator
 import visualizations
 
 def run_simulation():
+    # Capture console output
+    old_stdout = sys.stdout
+    captured_output = StringIO()
+    sys.stdout = captured_output
+    
     print("=== Bike-Sharing System Simulation ===")
     
     Path('./cache').mkdir(exist_ok=True)
@@ -53,8 +60,16 @@ def run_simulation():
         visualizations.create_results_heatmap(bike_system)
         visualizations.create_hourly_trip_animation_map(bike_system)
         visualizations.create_hourly_station_heatmap(bike_system)
+        print("Visualizations created.")
     else:
         print("No successful trips to visualize.")
+
+    # Save console output
+    with open('./generated/console_output.txt', 'w') as f:
+        f.write(captured_output.getvalue())
+    
+    # Restore stdout
+    sys.stdout = old_stdout
 
 if __name__ == "__main__":
     run_simulation()

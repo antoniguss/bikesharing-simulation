@@ -32,7 +32,7 @@ class BikeShareSystem:
         }
         self.trip_log = []
         self.station_usage = {s.id: 0 for s in self.stations}
-        self.station_failures = {s.id: 0 for s in self.stations}  # Track failures per station
+        self.station_failures = {s.id: 0 for s in self.stations}
         self.route_usage = {key: 0 for key in self.station_routes}
 
     def _create_stations_from_file(self) -> List[Station]:
