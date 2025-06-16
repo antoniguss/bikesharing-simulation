@@ -5,3 +5,4 @@ __pycache__
 venv
 context.md
 .env
+secrets.toml

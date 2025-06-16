@@ -187,3 +187,74 @@ class BikeShareSystem:
                     self.station_failures[station.id] += 1
             return None
         return min(available_stations, key=lambda s: haversine_distance(location, (s.x, s.y)))
+
+    def get_rebalancing_route(self, current_hour: int, min_bikes_perc: float, max_bikes_perc: float) -> Optional[Dict]:
+        """
+        Calculates an optimized rebalancing route for a given hour based on station bike levels.
+        """
+        if not self.ors_client.client:
+            print("ORS client not available. Cannot calculate rebalancing route.")
+            return None
+
+        bike_counts_at_hour = self.hourly_bike_counts.get(current_hour)
+        if not bike_counts_at_hour:
+            print(f"No bike count data available for hour {current_hour}.")
+            return None
+
+        stations_to_visit = []
+        station_map = {s.id: s for s in self.stations}
+        for station_id, bike_count in bike_counts_at_hour.items():
+            station = station_map.get(station_id)
+            if not station or station.capacity == 0: continue
+            fill_ratio = bike_count / station.capacity
+            if fill_ratio <= min_bikes_perc or fill_ratio >= max_bikes_perc:
+                stations_to_visit.append(station)
+        
+        if len(stations_to_visit) < 1:
+            print("No stations require rebalancing with the given criteria.")
+            return {"waypoints": [], "route_geometry": None, "ordered_stations": []}
+
+        depot_station = self.stations[0]
+        
+        all_waypoint_stations = [depot_station] + stations_to_visit
+        
+        seen_ids = set()
+        unique_stations = [s for s in all_waypoint_stations if not (s.id in seen_ids or seen_ids.add(s.id))]
+
+        if len(unique_stations) < 2:
+            return {"waypoints": [], "route_geometry": None, "ordered_stations": []}
+            
+        # For a round trip, the first and last waypoints must be the depot.
+        # ORS optimizes all waypoints *between* the first and last.
+        final_waypoint_stations = [unique_stations[0]] + [s for s in unique_stations[1:]] + [unique_stations[0]]
+        waypoint_coords = [(s.x, s.y) for s in final_waypoint_stations]
+
+        try:
+            route_data = self.ors_client.client.directions(
+                coordinates=waypoint_coords,
+                profile='driving-car',
+                format='geojson',
+                optimize_waypoints=True
+            )
+        except Exception as e:
+            print(f"Error calling ORS API for optimized route: {e}")
+            return None
+
+        if not route_data or 'features' not in route_data or not route_data['features']:
+            print("Failed to get a rebalancing route from ORS.")
+            return None
+        
+        feature = route_data['features'][0]
+        route_geometry = feature['geometry']
+        optimized_indices = feature['properties']['way_points']
+        
+        # Ensure indices are within bounds and handle the depot station correctly
+        ordered_stations = []
+        for idx in optimized_indices:
+            if 0 <= idx < len(final_waypoint_stations):
+                ordered_stations.append(final_waypoint_stations[idx])
+
+        return {
+            "route_geometry": route_geometry,
+            "ordered_stations": ordered_stations
+        }

@@ -57,18 +57,37 @@ def create_poi_distribution_map(system: BikeShareSystem):
         'sport': 'cadetblue', 'station': 'black'
     }
 
+    # Add POIs
     for poi_type, poi_list in sorted(system.poi_db.poi_data.items()):
         if not poi_list: continue
-        fg = folium.FeatureGroup(name=poi_type.capitalize(), show=False).add_to(m)
+        fg = folium.FeatureGroup(name=poi_type.capitalize(), show=True).add_to(m)
         color = colors.get(poi_type, 'gray')
         
-        if 'geometry' in poi_list[0]:
-            for poi in poi_list:
-                folium.GeoJson(poi['geometry'], style_function=lambda _, c=color: {'fillColor': c, 'color': c}).add_to(fg)
-        else:
-            for poi in poi_list:
-                folium.CircleMarker(location=[poi['lat'], poi['lon']], radius=3, color=color, fill=True).add_to(fg)
+        for poi in poi_list:
+            if 'geometry' in poi:
+                # For area POIs (like neighborhoods, campuses)
+                folium.GeoJson(
+                    poi['geometry'],
+                    style_function=lambda _, c=color: {
+                        'fillColor': c,
+                        'color': c,
+                        'fillOpacity': 0.3,
+                        'weight': 2
+                    },
+                    tooltip=poi.get('name', poi_type)
+                ).add_to(fg)
+            else:
+                # For point POIs
+                folium.CircleMarker(
+                    location=[poi['lat'], poi['lon']],
+                    radius=3,
+                    color=color,
+                    fill=True,
+                    fill_opacity=0.7,
+                    tooltip=poi_type
+                ).add_to(fg)
 
+    # Add neighborhood boundaries
     try:
         boundaries_gdf = gpd.read_file(config.NEIGHBORHOOD_AREAS_GEOJSON_PATH)
         boundary_layer = folium.FeatureGroup(name='Neighborhood Boundaries', show=True).add_to(m)
@@ -79,6 +98,17 @@ def create_poi_distribution_map(system: BikeShareSystem):
         ).add_to(boundary_layer)
     except Exception as e:
         print(f"Warning: Could not add neighborhood boundaries to map: {e}")
+
+    # Add legend
+    legend_html = '''
+    <div style="position: fixed; bottom: 50px; left: 50px; width: 200px; height: 300px; 
+    border:2px solid grey; z-index:9999; font-size:14px; background-color: white; padding: 10px;">
+    <b>POI Types</b><br>
+    '''
+    for poi_type, color in colors.items():
+        legend_html += f'<i class="fa fa-circle" style="color:{color}"></i> {poi_type.capitalize()}<br>'
+    legend_html += '</div>'
+    m.get_root().html.add_child(folium.Element(legend_html))
 
     folium.LayerControl().add_to(m)
     m.save(str(config.POI_MAP_PATH))
@@ -96,12 +126,25 @@ def create_hourly_trip_animation_map(system: BikeShareSystem):
         timestamp = BASE_DATE + timedelta(minutes=(start_hour + 1) * 60)
         timestamp_str = timestamp.isoformat()
         
-        # --- FIX STARTS HERE ---
         # Add walking paths
-        features.append({'type': 'Feature','geometry': mapping(LineString([trip['user_origin'], trip['origin_station']])), 'properties': {'times': [timestamp_str] * 2, 'style': {'color': 'blue', 'weight': 2, 'opacity': 0.8, 'dashArray': '5, 5'}}})
-        features.append({'type': 'Feature','geometry': mapping(LineString([trip['dest_station'], trip['user_destination']])), 'properties': {'times': [timestamp_str] * 2, 'style': {'color': 'blue', 'weight': 2, 'opacity': 0.8, 'dashArray': '5, 5'}}})
+        features.append({
+            'type': 'Feature',
+            'geometry': mapping(LineString([trip['user_origin'], trip['origin_station']])),
+            'properties': {
+                'times': [timestamp_str] * 2,
+                'style': {'color': 'blue', 'weight': 2, 'opacity': 0.8, 'dashArray': '5, 5'}
+            }
+        })
+        features.append({
+            'type': 'Feature',
+            'geometry': mapping(LineString([trip['dest_station'], trip['user_destination']])),
+            'properties': {
+                'times': [timestamp_str] * 2,
+                'style': {'color': 'blue', 'weight': 2, 'opacity': 0.8, 'dashArray': '5, 5'}
+            }
+        })
         
-        # Add cycling path, correctly handling both LineString and MultiLineString
+        # Add cycling path
         cycle_geom = trip.get('route_geometry')
         if cycle_geom and isinstance(cycle_geom, (LineString, MultiLineString)):
             all_coords = []
@@ -120,18 +163,49 @@ def create_hourly_trip_animation_map(system: BikeShareSystem):
                         'style': {'color': 'red', 'weight': 4, 'opacity': 0.7}
                     }
                 })
-        # --- FIX ENDS HERE ---
+
+    # Add station markers for each hour
+    for hour in sorted(system.hourly_bike_counts.keys()):
+        timestamp = BASE_DATE + timedelta(hours=hour)
+        timestamp_str = timestamp.isoformat()
+        
+        for station_id, bike_count in system.hourly_bike_counts[hour].items():
+            station = next((s for s in system.stations if s.id == station_id), None)
+            if not station: continue
+            
+            features.append({
+                'type': 'Feature',
+                'geometry': {'type': 'Point', 'coordinates': [station.x, station.y]},
+                'properties': {
+                    'times': [timestamp_str],
+                    'icon': 'circle',
+                    'iconstyle': {
+                        'fillColor': get_station_color(bike_count, station.capacity),
+                        'fillOpacity': 0.9,
+                        'stroke': 'true',
+                        'radius': 8,
+                        'color': 'black',
+                        'weight': 1
+                    },
+                    'popup': (f"<b>{station.neighbourhood}</b><br>"
+                             f"Time: {timestamp.strftime('%H:%M')}<br>"
+                             f"Bikes: {bike_count} / {station.capacity}")
+                }
+            })
 
     folium.plugins.TimestampedGeoJson(
-        {'type': 'FeatureCollection', 'features': features}, period='PT1H', add_last_point=False,
-        auto_play=False, loop=False, duration='PT1M', transition_time=500, time_slider_drag_update=True
+        {'type': 'FeatureCollection', 'features': features},
+        period='PT1H',
+        add_last_point=False,
+        auto_play=False,
+        loop=False,
+        duration='PT1M',
+        transition_time=500,
+        time_slider_drag_update=True
     ).add_to(m)
 
-    # Add static station markers for context
-    station_fg = folium.FeatureGroup(name="Stations (Static)", show=True).add_to(m)
-    for s in system.stations:
-        folium.Marker(location=[s.y, s.x], icon=folium.Icon(color='darkgreen', icon='bicycle', prefix='fa'), tooltip=s.neighbourhood).add_to(station_fg)
-    folium.LayerControl().add_to(m)
+    # Add station status legend
+    m.get_root().html.add_child(folium.Element(STATION_LEGEND_HTML))
     m.save(str(config.HOURLY_TRIP_ANIMATION_PATH))
 
 

@@ -11,6 +11,7 @@ from typing import List, Tuple, Optional, Dict
 from pathlib import Path
 from dotenv import load_dotenv
 import os
+import streamlit as st
 
 from config import (
     NEIGHBORHOOD_AREAS_GEOJSON_PATH, POI_WEIGHTS_PATH, TIME_WEIGHTS_PATH,
@@ -175,10 +176,10 @@ class WeightManager:
             return 0.0
 
 class OpenRouteServiceClient:
-    """A wrapper for the OpenRouteService API client."""
+    """Client for the OpenRouteService API."""
     def __init__(self):
         load_dotenv()
-        self.api_key = os.getenv("ORS_API_KEY")
+        self.api_key = st.secrets["ORS_API_KEY"]
         self.client = None
         if self.api_key:
             try:

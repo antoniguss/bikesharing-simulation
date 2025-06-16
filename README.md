@@ -72,11 +72,17 @@ The simulation tracks and analyzes:
 - Hourly bike availability per station
 - Optimal rebalancing routes based on station fill levels
 
-[1]: https://www.openstreetmap.org/ "OpenStreetMap Homepage"
-[2]: https://osmnx.readthedocs.io/ "OSMnx Documentation"
-[3]: https://networkx.org/ "NetworkX Documentation"
-[4]: https://simpy.readthedocs.io/ "SimPy Documentation"
-[5]: https://python-visualization.github.io/folium/ "Folium Documentation"
-[6]: https://matplotlib.org/ "Matplotlib Homepage"
-[7]: https://contextily.readthedocs.io/ "Contextily Documentation"
-[8]: https://streamlit.io/ "Streamlit Homepage"
+### Data Sources & Attribution
+
+- Neighborhood boundaries and geographic data: [Eindhoven Open Data](https://data.eindhoven.nl/pages/home/)
+- User behavior model and trip generation: [9]
+
+- [1] https://www.openstreetmap.org/ "OpenStreetMap Homepage"
+- [2] https://osmnx.readthedocs.io/ "OSMnx Documentation"
+- [3] https://networkx.org/ "NetworkX Documentation"
+- [4] https://simpy.readthedocs.io/ "SimPy Documentation"
+- [5] https://python-visualization.github.io/folium/ "Folium Documentation"
+- [6] https://matplotlib.org/ "Matplotlib Homepage"
+- [7] https://contextily.readthedocs.io/ "Contextily Documentation"
+- [8] https://streamlit.io/ "Streamlit Homepage"
+- [9] https://www.sciencedirect.com/science/article/pii/S2352146518302412
