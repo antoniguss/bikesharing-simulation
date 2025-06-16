@@ -4,3 +4,4 @@ generated/*
 __pycache__
 venv
 context.md
+.env

@@ -10,7 +10,7 @@ import networkx as nx
 from typing import Dict, Tuple, Optional, List
 
 from data_models import Station, User
-from utils import POIDatabase, WeightManager, haversine_distance, get_osmnx_graph, get_random_point_in_polygon, get_file_md5
+from utils import POIDatabase, WeightManager, haversine_distance, get_osmnx_graph, get_random_point_in_polygon, get_file_md5, OpenRouteServiceClient
 from config import (
     POI_DATABASE_PATH, STATION_GEOJSON_PATH, GRAPH_FILE_PATH, CITY_QUERY,
     STATION_ROUTES_CACHE_PATH, STATION_ROUTES_META_PATH
@@ -23,6 +23,7 @@ class BikeShareSystem:
         self.weights = WeightManager()
         self.graph = get_osmnx_graph(CITY_QUERY, GRAPH_FILE_PATH)
         self.stations : List[Station] = self._create_stations_from_file()
+        self.ors_client = OpenRouteServiceClient()
         self.station_routes = self._precompute_station_routes()
         
         self.stats = {
@@ -47,8 +48,8 @@ class BikeShareSystem:
 
     def _precompute_station_routes(self) -> Dict[Tuple[int, int], Dict]:
         """
-        Precomputes routes between stations. Loads from cache if the station
-        file has not changed, otherwise computes and saves to cache.
+        Precomputes routes between stations. Uses ORS for times/distances and OSMnx for route geometry.
+        Loads from cache if the station file has not changed.
         """
         current_hash = get_file_md5(STATION_GEOJSON_PATH)
         
@@ -65,6 +66,17 @@ class BikeShareSystem:
 
         print("Cache invalid or not found. Precomputing station routes...")
         routes = {}
+
+        # Get times/distances from ORS if available
+        ors_matrix = None
+        if self.ors_client.client:
+            print("Getting travel times from OpenRouteService...")
+            locations = [(s.x, s.y) for s in self.stations]
+            ors_matrix = self.ors_client.get_matrix(locations)
+            if not ors_matrix:
+                print("ORS matrix calculation failed, falling back to OSMnx for times...")
+
+        # Compute routes using OSMnx for geometry and times (if ORS not available)
         for origin in self.stations:
             for dest in self.stations:
                 if origin.id == dest.id: continue
@@ -73,13 +85,21 @@ class BikeShareSystem:
                     d_node = ox.nearest_nodes(self.graph, dest.x, dest.y)
                     path = ox.shortest_path(self.graph, o_node, d_node, weight='length')
                     if path:
-                        # --- FIX: Removed the 'weight' argument ---
                         route_gdf = ox.routing.route_to_gdf(self.graph, path)
-                        routes[(origin.id, dest.id)] = {
+                        route_data = {
                             'geometry': route_gdf.unary_union,
                             'distance': route_gdf['length'].sum() / 1000,
                             'duration': (route_gdf['length'].sum() / 1000) / 15 * 60
                         }
+                        
+                        # Override with ORS data if available
+                        if ors_matrix:
+                            i = self.stations.index(origin)
+                            j = self.stations.index(dest)
+                            route_data['distance'] = ors_matrix['distances'][i][j] / 1000  # Convert to km
+                            route_data['duration'] = ors_matrix['durations'][i][j] / 60    # Convert to minutes
+                            
+                        routes[(origin.id, dest.id)] = route_data
                 except (nx.NetworkXNoPath, nx.NodeNotFound):
                     continue
         

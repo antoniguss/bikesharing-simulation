@@ -11,6 +11,8 @@ import hashlib
 import csv
 from shapely.geometry import Polygon, Point
 from config import NEIGHBORHOOD_AREAS_GEOJSON_PATH, POI_WEIGHTS_PATH, TIME_WEIGHTS_PATH
+from typing import List, Tuple, Optional, Dict
+from dotenv import load_dotenv
 
 # Configure OSMNX Caching
 ox.utils.settings.use_cache = True
@@ -212,3 +214,36 @@ class WeightManager:
             return float(value) / 60
         else:
             return 0.01
+
+class OpenRouteServiceClient:
+    def __init__(self):
+        load_dotenv()  # Load environment variables from .env file
+        self.api_key = os.getenv('ORS_API_KEY')
+        self.client = None
+        if self.api_key:
+            import openrouteservice
+            self.client = openrouteservice.Client(key=self.api_key)
+    
+    def get_matrix(self, locations: List[Tuple[float, float]]) -> Optional[Dict]:
+        """Get time and distance matrix between locations using ORS."""
+        if not self.client:
+            return None
+            
+        try:
+            # Convert coordinates to ORS format (longitude, latitude)
+            coords = [[lon, lat] for lon, lat in locations]
+            
+            # Get both duration and distance matrices
+            matrix = self.client.distance_matrix(
+                locations=coords,
+                metrics=['duration', 'distance'],
+                profile='cycling-regular'
+            )
+            
+            return {
+                'durations': matrix['durations'],
+                'distances': matrix['distances']
+            }
+        except Exception as e:
+            print(f"Error getting ORS matrix: {e}")
+            return None
