@@ -62,7 +62,7 @@ def create_hourly_trip_animation_map(system: BikeShareSystem):
                     'geometry': mapping(cycle_geom),
                     'properties': {
                         'times': [timestamp_str] * len(coords),
-                        'style': {'color': 'red', 'weight': 5, 'opacity': 0.6},
+                        'style': {'color': 'red', 'weight': 20, 'opacity': 0.2},
                         'popup': f"Cycle Route (Trip started hour {start_hour})"
                     }
                 })
