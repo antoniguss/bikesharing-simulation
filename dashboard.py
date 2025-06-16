@@ -64,6 +64,7 @@ with st.sidebar:
             st.error(f"File not found: {config.TIME_WEIGHTS_PATH}")
 
     if st.button("Run Simulation", type="primary", use_container_width=True):
+        st.info("Starting simulation initialization... This may take a few minutes if data needs to be downloaded.")
         with st.spinner("Running simulation... This may take a few minutes."):
             config.SIMULATION_DURATION = duration_hours * 60
             config.SIMULATION_START_TIME = start_time_hours * 60

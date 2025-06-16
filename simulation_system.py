@@ -8,6 +8,7 @@ import osmnx as ox
 import geopandas as gpd
 import networkx as nx
 from typing import Dict, Tuple, Optional, List
+import streamlit as st
 
 from data_models import Station, User
 from utils import (
@@ -24,14 +25,34 @@ class BikeShareSystem:
     """Manages the state and logic of the entire bike-sharing system."""
 
     def __init__(self):
-        print("--- Initializing Bike Share System ---")
+        st.info("Initializing Bike Share System...")
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        status_text.text("Loading POI database...")
         self.poi_db = POIDatabase()
+        progress_bar.progress(20)
+        
+        status_text.text("Loading weights...")
         self.weights = WeightManager()
+        progress_bar.progress(40)
+        
+        status_text.text("Loading street network...")
         self.graph = get_osmnx_graph(CITY_QUERY, GRAPH_FILE_PATH)
+        progress_bar.progress(60)
+        
+        status_text.text("Loading stations...")
         self.stations: List[Station] = self._load_stations()
+        progress_bar.progress(80)
+        
+        status_text.text("Initializing route service...")
         self.ors_client = OpenRouteServiceClient()
+        progress_bar.progress(90)
+        
+        status_text.text("Computing station routes...")
         self.station_routes = self._precompute_or_load_station_routes()
-
+        progress_bar.progress(100)
+        
         # Simulation statistics
         self.stats = {
             "successful_trips": 0, "failed_trips": 0,
@@ -42,6 +63,9 @@ class BikeShareSystem:
         self.station_failures: Dict[int, int] = {s.id: 0 for s in self.stations}
         self.route_usage: Dict[Tuple[int, int], int] = {key: 0 for key in self.station_routes}
         self.hourly_bike_counts: Dict[int, Dict[int, int]] = {}
+        
+        status_text.empty()
+        progress_bar.empty()
 
     def _load_stations(self) -> List[Station]:
         """Loads station data from the GeoJSON file."""
