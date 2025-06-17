@@ -433,10 +433,9 @@ def create_rebalancing_route_map(system: BikeShareSystem, min_threshold: float =
                     folium.CircleMarker(
                         location=[station.y, station.x],
                         radius=12,
-                        color='red',
+                        color='blue',
                         weight=2,
                         fill=True,
-                        fill_color='red',
                         fill_opacity=0.9,
                         tooltip=(
                             f"Stop {count}: {station.neighbourhood}<br>"
@@ -445,22 +444,14 @@ def create_rebalancing_route_map(system: BikeShareSystem, min_threshold: float =
                     ).add_to(m)
                     
                     # Add number label
-                    folium.DivIcon(
-                        html=f'<div style="font-size: 12pt; color: white; font-weight: bold;">{count}</div>',
-                        icon_size=(20, 20),
-                        icon_anchor=(10, 10)
-                    ).add_to(folium.Popup().add_to(
-                        folium.CircleMarker(
-                            location=[station.y, station.x],
-                            radius=0,
-                            popup=folium.Popup(html=f'<div style="font-size: 12pt; color: white; font-weight: bold;">{count}</div>', max_width=20),
-                            icon=folium.DivIcon(
-                                html=f'<div style="font-size: 12pt; color: white; font-weight: bold;">{count}</div>',
-                                icon_size=(20, 20),
-                                icon_anchor=(10, 10)
-                            )
-                        ).add_to(m)
-                    ))
+                    folium.Marker(
+                        location=[station.y, station.x],
+                        icon=folium.DivIcon(
+                            html=f'<div style="font-size: 12pt; color: white; font-weight: bold;">{count}</div>',
+                            icon_size=(20, 20),
+                            icon_anchor=(10, 10)
+                        )
+                    ).add_to(m)
 
     # Add legend
     m.get_root().html.add_child(folium.Element(STATION_LEGEND_HTML))
