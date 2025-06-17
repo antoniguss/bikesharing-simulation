@@ -234,18 +234,19 @@ else:
 
                 if st.button("Generate Rebalancing Route"):
                     with st.spinner("Generating optimal rebalancing route..."):
-                        result = visualizations.create_rebalancing_route_map(
+                        route_path = visualizations.create_rebalancing_route_map(
                             bike_system, min_threshold, max_threshold
                         )
-                        if result:
-                            route_path, visit_order = result
+                        if route_path:
                             st.success("Route generated successfully!")
                             display_html_file(Path(route_path))
                             
                             # Display the visit order table
-                            if visit_order:
+                            order_path = config.GENERATED_DIR / 'rebalancing_order.html'
+                            if order_path.exists():
                                 st.subheader("Visit Order")
-                                st.dataframe(pd.DataFrame(visit_order), use_container_width=True)
+                                with open(order_path, 'r') as f:
+                                    st.components.html(f.read(), height=400, scrolling=True)
                         else:
                             st.error("Failed to generate rebalancing route. Check if OpenRouteService is available.")
             else:
