@@ -9,7 +9,6 @@ import geopandas as gpd
 from shapely.geometry import Polygon, Point, mapping
 from typing import List, Tuple, Optional, Dict
 from pathlib import Path
-from dotenv import load_dotenv
 import os
 import streamlit as st
 
@@ -178,7 +177,6 @@ class WeightManager:
 class OpenRouteServiceClient:
     """Client for the OpenRouteService API."""
     def __init__(self):
-        load_dotenv()
         self.api_key = st.secrets["ORS_API_KEY"]
         self.client = None
         if self.api_key:

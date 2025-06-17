@@ -4,7 +4,7 @@ from pathlib import Path
 # --- Simulation Parameters ---
 SIMULATION_DURATION = 24 * 60  # Total simulation time in minutes
 SIMULATION_START_TIME = 0 * 60   # Simulation start time in minutes from midnight (e.g., 6 * 60 for 6:00 AM)
-MAX_TOTAL_WALK_DISTANCE_KM = 1.0 # Maximum total walking distance for a trip (to and from stations)
+MAX_TOTAL_WALK_DISTANCE_KM = 0.75 # Maximum total walking distance for a trip (to and from stations), currently 750 m which takes ~10 mins
 
 # --- Physical Constants ---
 WALKING_SPEED_KMPH = 5.0
@@ -37,6 +37,7 @@ RESULTS_HEATMAP_PATH = GENERATED_DIR / 'simulation_results_heatmap.png'
 HOURLY_STATION_HEATMAP_PATH = GENERATED_DIR / 'hourly_station_heatmap.png'
 POI_MAP_PATH = GENERATED_DIR / 'poi_and_boundaries_map.html'
 REBALANCING_ROUTE_MAP_PATH = GENERATED_DIR / 'rebalancing_route.html'
+HOURLY_FAILURES_PATH = GENERATED_DIR / 'hourly_failures.png'
 
 # --- Geographic Configuration ---
 CITY_QUERY = "Eindhoven, Netherlands"

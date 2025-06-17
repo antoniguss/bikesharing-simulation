@@ -62,6 +62,7 @@ def run_simulation() -> BikeShareSystem:
     visualizations.create_poi_distribution_map(bike_system)
     
     print("\nStarting simulation...")
+    print(f"Maximum walking distance: {config.MAX_TOTAL_WALK_DISTANCE_KM:.1f} km")
     
     env.process(user_generator(env, bike_system))
     env.process(bike_system.record_bike_counts_process(env))
@@ -80,6 +81,7 @@ def run_simulation() -> BikeShareSystem:
         print("No successful trips to visualize, skipping trip-based maps.")
     
     visualizations.create_station_availability_animation_map(bike_system)
+    visualizations.create_hourly_failures_plot(bike_system)
     print("Visualizations created successfully.")
 
     with open(config.CONSOLE_OUTPUT_PATH, 'w') as f:

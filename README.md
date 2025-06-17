@@ -3,14 +3,20 @@
 We're creating a digital model of a bike-sharing system for specific neighbourhoods in Eindhoven.
 Our main goal is to **test and visualize the system's performance before building it in real life** and to serve as a **proof of concept** for a tool that could be used in real-time operations.
 
-The key questions it helps answer are:
+The simulation helps validate our business plan by answering key operational questions:
 
-- Are the stations placed correctly?
+- Are the stations placed correctly to serve 15-minute city neighborhoods?
 - How often do trips fail due to no available bikes?
 - How often do trips fail because a station is full?
 - What are the most common travel routes?
 - How does bike availability change throughout the day?
 - What is the optimal route for rebalancing bikes between stations?
+
+The results provide evidence for:
+- Operational feasibility through success/failure rates and station usage patterns
+- Financial sustainability via demand patterns and rebalancing costs
+- Real-time decision support for bike allocation and routing
+- System responsiveness to dynamic demand fluctuations
 
 ## Implementation
 

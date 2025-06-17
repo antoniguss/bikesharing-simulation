@@ -63,6 +63,7 @@ class BikeShareSystem:
         self.station_failures: Dict[int, int] = {s.id: 0 for s in self.stations}
         self.route_usage: Dict[Tuple[int, int], int] = {key: 0 for key in self.station_routes}
         self.hourly_bike_counts: Dict[int, Dict[int, int]] = {}
+        self.hourly_failures: Dict[int, int] = {h: 0 for h in range(24)}  # Track failures by hour
         
         status_text.empty()
         progress_bar.empty()

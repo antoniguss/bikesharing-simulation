@@ -7,6 +7,7 @@ from pathlib import Path
 
 from main import run_simulation
 import config
+import visualizations
 
 st.set_page_config(layout="wide", page_title="Bike Share Simulation Dashboard")
 
@@ -43,6 +44,10 @@ with st.sidebar:
         "Start Time (24-hour format)",
         min_value=0, max_value=23, value=config.SIMULATION_START_TIME // 60, step=1
     )
+    walking_threshold = st.slider(
+        "Maximum Walking Distance (km)",
+        min_value=0.1, max_value=2.0, value=config.MAX_TOTAL_WALK_DISTANCE_KM, step=0.1
+    )
 
     with st.expander("Edit Weights", expanded=False):
         try:
@@ -64,7 +69,6 @@ with st.sidebar:
             st.error(f"File not found: {config.TIME_WEIGHTS_PATH}")
 
     if st.button("Run Simulation", type="primary", use_container_width=True):
-        st.info("Starting simulation initialization... This may take a few minutes if data needs to be downloaded.")
         with st.spinner("Running simulation... This may take a few minutes."):
             config.SIMULATION_DURATION = duration_hours * 60
             config.SIMULATION_START_TIME = start_time_hours * 60
@@ -92,18 +96,41 @@ else:
         total_trips = stats["successful_trips"] + stats["failed_trips"]
         success_rate = (stats["successful_trips"] / total_trips * 100) if total_trips > 0 else 0
 
+        # Create station map for lookups
+        station_map = {s.id: s.neighbourhood for s in bike_system.stations}
+
+        # Key metrics at the top
         col1, col2, col3 = st.columns(3)
         col1.metric("Successful Trips", f"{stats['successful_trips']:,}")
         col2.metric("Failed Trips", f"{stats['failed_trips']:,}")
         col3.metric("Success Rate", f"{success_rate:.1f}%")
 
-        tabs = ["Station Data", "Trip Animation", "Station Availability", "All Trip Paths", "Heatmaps", "POI Distribution", "Logs", "Rebalancing Route"]
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs(tabs)
+        # Main tabs for different aspects of the simulation
+        tabs = ["System Overview", "Station Analysis", "Trip Analysis", "System Maps", "Rebalancing"]
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(tabs)
 
         with tab1:
-            st.subheader("Hourly Bike Availability per Station")
-            station_map = {s.id: s.neighbourhood for s in bike_system.stations}
-            
+            # System Overview tab - Key visualizations and metrics
+            st.subheader("System Performance")
+            col_overview1, col_overview2 = st.columns(2)
+            with col_overview1:
+                st.subheader("Failed Trips by Hour")
+                display_image_file(config.HOURLY_FAILURES_PATH)
+            with col_overview2:
+                st.subheader("Hourly Station Activity")
+                display_image_file(config.HOURLY_STATION_HEATMAP_PATH)
+
+            st.subheader("Station Usage Statistics")
+            usage_data = [
+                {"Station": station_map.get(s_id, f"ID_{s_id}"), "Trips": trips}
+                for s_id, trips in bike_system.station_usage.items()
+            ]
+            usage_df = pd.DataFrame(usage_data).sort_values("Trips", ascending=False, ignore_index=True)
+            st.dataframe(usage_df, use_container_width=True)
+
+        with tab2:
+            # Station Analysis tab - Detailed station data
+            st.subheader("Station Data")
             if bike_system.hourly_bike_counts:
                 counts_df = pd.DataFrame(bike_system.hourly_bike_counts).sort_index()
                 counts_df.index = counts_df.index.map(station_map)
@@ -147,83 +174,105 @@ else:
             usage_df = pd.DataFrame(usage_data).sort_values("Trips", ascending=False, ignore_index=True)
             st.dataframe(usage_df, use_container_width=True)
 
-        with tab2:
-            st.subheader("Hourly Trip Animation")
-            display_html_file(config.HOURLY_TRIP_ANIMATION_PATH)
-
         with tab3:
-            st.subheader("Hourly Station Availability Animation")
-            display_html_file(config.STATION_AVAILABILITY_ANIMATION_PATH)
-
-        with tab4:
-            st.subheader("All Trip Paths")
-            display_html_file(config.ALL_TRIP_PATHS_MAP_PATH)
-
-        with tab5:
-            col_heat1, col_heat2 = st.columns(2)
-            with col_heat1:
+            # Trip Analysis tab - Trip-related visualizations
+            st.subheader("Trip Patterns")
+            col_trip1, col_trip2 = st.columns(2)
+            with col_trip1:
                 st.subheader("Route Usage Heatmap")
                 display_image_file(config.RESULTS_HEATMAP_PATH)
-            with col_heat2:
-                st.subheader("Hourly Station Activity")
-                display_image_file(config.HOURLY_STATION_HEATMAP_PATH)
+            with col_trip2:
+                st.subheader("All Trip Paths")
+                display_html_file(config.ALL_TRIP_PATHS_MAP_PATH)
 
-        with tab6:
-            st.subheader("POI Distribution")
-            display_html_file(config.POI_MAP_PATH)
-
-        with tab7:
-            st.subheader("Console Log")
-            try:
-                with open(config.CONSOLE_OUTPUT_PATH, 'r') as f:
-                    st.code(f.read(), language="text")
-            except FileNotFoundError:
-                st.warning("Console output file not found.")
-
-        with tab8:
-            st.subheader("Rebalancing Route Optimization")
+        with tab4:
+            # System Maps tab - Interactive maps and animations
+            st.subheader("Interactive Maps")
+            map_tabs = ["Trip Animation", "Station Availability", "POI Distribution"]
+            map_tab1, map_tab2, map_tab3 = st.tabs(map_tabs)
             
-            col1, col2 = st.columns(2)
-            with col1:
-                low_threshold = st.slider("Low Bike Threshold (%)", 0, 50, 30)
-            with col2:
-                high_threshold = st.slider("High Bike Threshold (%)", 50, 100, 70)
+            with map_tab1:
+                st.subheader("Hourly Trip Animation")
+                display_html_file(config.HOURLY_TRIP_ANIMATION_PATH)
+            
+            with map_tab2:
+                st.subheader("Hourly Station Availability Animation")
+                display_html_file(config.STATION_AVAILABILITY_ANIMATION_PATH)
+            
+            with map_tab3:
+                st.subheader("POI Distribution")
+                display_html_file(config.POI_MAP_PATH)
 
-            if st.button("Calculate Rebalancing Route"):
-                stations_to_visit = []
-                for station in bike_system.stations:
-                    fill_ratio = station.bikes / station.capacity
-                    if fill_ratio < (low_threshold / 100) or fill_ratio > (high_threshold / 100):
-                        stations_to_visit.append(station)
-
-                if not stations_to_visit:
-                    st.info("No stations need rebalancing with current thresholds.")
-                else:
-                    # Get coordinates for route optimization
-                    station_coords = [(s.x, s.y) for s in stations_to_visit]
-                    route_data = bike_system.ors_client.optimize_rebalancing_route(station_coords)
-
-                    if route_data:
-                        from visualizations import create_rebalancing_route_map
-                        create_rebalancing_route_map(bike_system, route_data, stations_to_visit)
-                        
-                        # Display the route map
-                        display_html_file(config.REBALANCING_ROUTE_MAP_PATH)
-                        
-                        # Display station visit order
-                        st.subheader("Station Visit Order")
-                        visit_data = []
-                        for i, station in enumerate(stations_to_visit, 1):
+        with tab5:
+            # Rebalancing Analysis tab
+            st.subheader("Bike Rebalancing Analysis")
+            
+            col_reb1, col_reb2 = st.columns([1, 2])
+            with col_reb1:
+                st.subheader("Rebalancing Parameters")
+                current_hour = st.selectbox(
+                    "Select Hour",
+                    options=list(range(24)),
+                    format_func=lambda x: f"{x:02d}:00"
+                )
+                min_bikes = st.slider(
+                    "Minimum Bike Percentage",
+                    min_value=0.0,
+                    max_value=0.5,
+                    value=0.3,
+                    step=0.1,
+                    help="Stations below this percentage will be considered for rebalancing"
+                )
+                max_bikes = st.slider(
+                    "Maximum Bike Percentage",
+                    min_value=0.5,
+                    max_value=1.0,
+                    value=0.8,
+                    step=0.1,
+                    help="Stations above this percentage will be considered for rebalancing"
+                )
+                
+                if st.button("Calculate Rebalancing Route", type="primary"):
+                    with st.spinner("Calculating optimal rebalancing route..."):
+                        route_data = bike_system.get_rebalancing_route(current_hour, min_bikes, max_bikes)
+                        if route_data and route_data.get("route_geometry"):
+                            st.success("Route calculated successfully!")
+                            st.session_state.rebalancing_route = route_data
+                            st.session_state.rebalancing_stations = route_data.get("ordered_stations", [])
+                            visualizations.create_rebalancing_route_map(bike_system, 
+                                                                        route_data['route_geometry'], 
+                                                                        st.session_state.rebalancing_stations,
+                                                                        min_bikes, max_bikes)
+                        else:
+                            st.warning("No stations need rebalancing with current parameters.")
+            
+            with col_reb2:
+                st.subheader("Rebalancing Route")
+                if hasattr(st.session_state, 'rebalancing_route') and st.session_state.rebalancing_route:
+                    display_html_file(config.REBALANCING_ROUTE_MAP_PATH)
+                    
+                    if st.session_state.rebalancing_stations:
+                        st.subheader("Stations to Visit")
+                        station_data = []
+                        for i, station in enumerate(st.session_state.rebalancing_stations, 1):
                             fill_ratio = station.bikes / station.capacity
-                            reason = "Low bikes" if fill_ratio < (low_threshold / 100) else "High bikes"
-                            visit_data.append({
+                            status = "Low bikes" if fill_ratio < min_bikes else "High bikes"
+                            station_data.append({
                                 "Order": i,
                                 "Station": station.neighbourhood,
                                 "Current Bikes": station.bikes,
                                 "Capacity": station.capacity,
                                 "Fill Ratio": f"{fill_ratio:.1%}",
-                                "Reason": reason
+                                "Status": status
                             })
-                        st.dataframe(pd.DataFrame(visit_data), use_container_width=True)
-                    else:
-                        st.error("Failed to calculate optimized route. Please check your ORS API key.")
+                        st.dataframe(pd.DataFrame(station_data), use_container_width=True)
+                else:
+                    st.info("Configure parameters and calculate route to see rebalancing plan.")
+
+        # Console log at the bottom
+        with st.expander("View Console Log"):
+            try:
+                with open(config.CONSOLE_OUTPUT_PATH, 'r') as f:
+                    st.code(f.read(), language="text")
+            except FileNotFoundError:
+                st.warning("Console output file not found.")

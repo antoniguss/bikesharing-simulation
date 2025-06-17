@@ -13,11 +13,13 @@ def handle_user_trip(env: Environment, bike_system: BikeShareSystem, user: User)
     origin_station = bike_system.find_nearest_station_with_bike(user.origin)
     if not origin_station:
         bike_system.stats["failed_trips"] += 1
+        bike_system.hourly_failures[int(env.now / 60) % 24] += 1
         return
 
     dest_station = bike_system.find_nearest_station_with_space(user.destination)
     if not dest_station:
         bike_system.stats["failed_trips"] += 1
+        bike_system.hourly_failures[int(env.now / 60) % 24] += 1
         return
 
     # 2. Calculate trip segments and check constraints
@@ -26,6 +28,7 @@ def handle_user_trip(env: Environment, bike_system: BikeShareSystem, user: User)
     
     if (walk_to_dist + walk_from_dist) > config.MAX_TOTAL_WALK_DISTANCE_KM:
         bike_system.stats["failed_trips"] += 1
+        bike_system.hourly_failures[int(env.now / 60) % 24] += 1
         return
         
     cycle_dist, cycle_time, route_geometry = bike_system.get_cycling_info(origin_station.id, dest_station.id)

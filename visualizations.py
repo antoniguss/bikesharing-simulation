@@ -272,10 +272,13 @@ def create_all_trip_paths_map(system: BikeShareSystem):
         walk_paths = folium.FeatureGroup(name="Walking Paths", show=False).add_to(m)
         bike_paths = folium.FeatureGroup(name="Cycling Paths", show=True).add_to(m)
         for trip in system.trip_log:
-            folium.PolyLine([(p[1], p[0]) for p in [trip['user_origin'], trip['origin_station']]], color='blue', weight=2.5, opacity=0.8, dash_array='5').add_to(walk_paths)
-            folium.PolyLine([(p[1], p[0]) for p in [trip['dest_station'], trip['user_destination']]], color='blue', weight=2.5, opacity=0.8, dash_array='5').add_to(walk_paths)
+            folium.PolyLine([(p[1], p[0]) for p in [trip['user_origin'], trip['origin_station']]], 
+                          color='blue', weight=1.5, opacity=0.3, dash_array='5').add_to(walk_paths)
+            folium.PolyLine([(p[1], p[0]) for p in [trip['dest_station'], trip['user_destination']]], 
+                          color='blue', weight=1.5, opacity=0.3, dash_array='5').add_to(walk_paths)
             if trip.get('route_geometry'):
-                folium.GeoJson(trip['route_geometry'], style_function=lambda x: {'color': 'red', 'weight': 3}).add_to(bike_paths)
+                folium.GeoJson(trip['route_geometry'], 
+                             style_function=lambda x: {'color': 'red', 'weight': 2, 'opacity': 0.2}).add_to(bike_paths)
             
     m.get_root().html.add_child(folium.Element(STATION_LEGEND_HTML))
     folium.LayerControl().add_to(m)
@@ -344,24 +347,27 @@ def create_hourly_station_heatmap(system: BikeShareSystem):
     plt.savefig(str(config.HOURLY_STATION_HEATMAP_PATH), dpi=150, bbox_inches='tight')
     plt.close(fig)
 
-def create_rebalancing_route_map(system: BikeShareSystem, route_data: Dict, stations_to_visit: List[Station]) -> None:
+def create_rebalancing_route_map(system: BikeShareSystem, route_geometry: dict, ordered_stations: List[Station], min_bikes_perc: float, max_bikes_perc: float) -> None:
     """Creates a map visualization of the optimized rebalancing route."""
-    if not route_data or not stations_to_visit: return
+    if not route_geometry or not ordered_stations: return
     
     map_center = [system.stations[0].y, system.stations[0].x]
     m = folium.Map(location=map_center, zoom_start=13, tiles="CartoDB positron")
 
     # Add the optimized route
     folium.GeoJson(
-        route_data,
+        route_geometry,
         style_function=lambda x: {'color': 'red', 'weight': 4, 'opacity': 0.7}
     ).add_to(m)
 
-    # Add station markers
-    for i, station in enumerate(stations_to_visit, 1):
+    # Add station markers in the optimized order
+    for i, station in enumerate(ordered_stations, 1):
         fill_ratio = station.bikes / station.capacity
-        color = '#d9534f' if fill_ratio < 0.3 else '#0275d8'  # Red for low, Blue for high
-        reason = "Low bikes" if fill_ratio < 0.3 else "High bikes"
+        # Use the provided min/max percentages for coloring and status text
+        color = '#d9534f' if fill_ratio < min_bikes_perc else (
+                '#0275d8' if fill_ratio > max_bikes_perc else '#5cb85c') # Default green for 'normal'
+        reason = "Low bikes" if fill_ratio < min_bikes_perc else (
+                 "High bikes" if fill_ratio > max_bikes_perc else "Normal")
         
         folium.CircleMarker(
             location=[station.y, station.x],
@@ -375,3 +381,22 @@ def create_rebalancing_route_map(system: BikeShareSystem, route_data: Dict, stat
         ).add_to(m)
 
     m.save(str(config.REBALANCING_ROUTE_MAP_PATH))
+
+def create_hourly_failures_plot(system: BikeShareSystem):
+    """Creates a plot showing the number of failed trips by hour."""
+    if not system.hourly_failures: return
+    
+    hours = list(range(24))
+    failures = [system.hourly_failures[h] for h in hours]
+    
+    fig, ax = plt.subplots(figsize=(12, 6))
+    ax.bar(hours, failures, color='#d9534f')
+    ax.set_xlabel('Hour of Day')
+    ax.set_ylabel('Number of Failed Trips')
+    ax.set_title('Failed Trips by Hour')
+    ax.set_xticks(hours)
+    ax.set_xticklabels([f"{h:02d}:00" for h in hours], rotation=45)
+    
+    plt.tight_layout()
+    plt.savefig(str(config.HOURLY_FAILURES_PATH), dpi=150, bbox_inches='tight')
+    plt.close(fig)
