@@ -407,7 +407,7 @@ def create_rebalancing_route_map(system: BikeShareSystem, min_threshold: float =
         # Create route line
         folium.PolyLine(
             locations=[[coord[1], coord[0]] for coord in decoded_route['coordinates']],
-            color='red',
+            color='blue',
             weight=4,
             opacity=0.8,
             tooltip="Rebalancing Route"
@@ -445,22 +445,14 @@ def create_rebalancing_route_map(system: BikeShareSystem, min_threshold: float =
                     ).add_to(m)
                     
                     # Add number label
-                    folium.DivIcon(
-                        html=f'<div style="font-size: 12pt; color: white; font-weight: bold;">{count}</div>',
-                        icon_size=(20, 20),
-                        icon_anchor=(10, 10)
-                    ).add_to(folium.Popup().add_to(
-                        folium.CircleMarker(
-                            location=[station.y, station.x],
-                            radius=0,
-                            popup=folium.Popup(html=f'<div style="font-size: 12pt; color: white; font-weight: bold;">{count}</div>', max_width=20),
-                            icon=folium.DivIcon(
-                                html=f'<div style="font-size: 12pt; color: white; font-weight: bold;">{count}</div>',
-                                icon_size=(20, 20),
-                                icon_anchor=(10, 10)
-                            )
-                        ).add_to(m)
-                    ))
+                    folium.Marker(
+                        location=[station.y, station.x],
+                        icon=folium.DivIcon(
+                            html=f'<div style="font-size: 12pt; color: white; font-weight: bold;">{count}</div>',
+                            icon_size=(20, 20),
+                            icon_anchor=(10, 10)
+                        )
+                    ).add_to(m)
 
     # Add legend
     m.get_root().html.add_child(folium.Element(STATION_LEGEND_HTML))
