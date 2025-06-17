@@ -172,7 +172,7 @@ def create_hourly_trip_animation_map(system: BikeShareSystem):
                     'geometry': mapping(cycle_geom),
                     'properties': {
                         'times': [timestamp_str] * len(all_coords),
-                        'style': {'color': 'red', 'weight': 4, 'opacity': 0.7}
+                        'style': {'color': 'red', 'weight': 4, 'opacity': 0.3}
                     }
                 })
 
