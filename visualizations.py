@@ -8,8 +8,10 @@ import matplotlib.pyplot as plt
 import contextily as cx
 from shapely.geometry import Point, LineString, MultiLineString, mapping
 from datetime import datetime, timedelta
-from typing import Dict, List
+from typing import Dict, List, Optional
 from data_models import Station
+from openrouteservice import convert
+import pandas as pd
 
 import config
 from simulation_system import BikeShareSystem
@@ -347,41 +349,6 @@ def create_hourly_station_heatmap(system: BikeShareSystem):
     plt.savefig(str(config.HOURLY_STATION_HEATMAP_PATH), dpi=150, bbox_inches='tight')
     plt.close(fig)
 
-def create_rebalancing_route_map(system: BikeShareSystem, route_geometry: dict, ordered_stations: List[Station], min_bikes_perc: float, max_bikes_perc: float) -> None:
-    """Creates a map visualization of the optimized rebalancing route."""
-    if not route_geometry or not ordered_stations: return
-    
-    map_center = [system.stations[0].y, system.stations[0].x]
-    m = folium.Map(location=map_center, zoom_start=13, tiles="CartoDB positron")
-
-    # Add the optimized route
-    folium.GeoJson(
-        route_geometry,
-        style_function=lambda x: {'color': 'red', 'weight': 4, 'opacity': 0.7}
-    ).add_to(m)
-
-    # Add station markers in the optimized order
-    for i, station in enumerate(ordered_stations, 1):
-        fill_ratio = station.bikes / station.capacity
-        # Use the provided min/max percentages for coloring and status text
-        color = '#d9534f' if fill_ratio < min_bikes_perc else (
-                '#0275d8' if fill_ratio > max_bikes_perc else '#5cb85c') # Default green for 'normal'
-        reason = "Low bikes" if fill_ratio < min_bikes_perc else (
-                 "High bikes" if fill_ratio > max_bikes_perc else "Normal")
-        
-        folium.CircleMarker(
-            location=[station.y, station.x],
-            radius=8,
-            color='black',
-            weight=1,
-            fill=True,
-            fill_color=color,
-            fill_opacity=0.9,
-            popup=f"#{i}: {station.neighbourhood}<br>Bikes: {station.bikes}/{station.capacity}<br>Reason: {reason}"
-        ).add_to(m)
-
-    m.save(str(config.REBALANCING_ROUTE_MAP_PATH))
-
 def create_hourly_failures_plot(system: BikeShareSystem):
     """Creates a plot showing the number of failed trips by hour."""
     if not system.hourly_failures: return
@@ -400,3 +367,105 @@ def create_hourly_failures_plot(system: BikeShareSystem):
     plt.tight_layout()
     plt.savefig(str(config.HOURLY_FAILURES_PATH), dpi=150, bbox_inches='tight')
     plt.close(fig)
+
+def create_rebalancing_route_map(system: BikeShareSystem, min_threshold: float = 0.3, max_threshold: float = 0.7) -> Optional[tuple[str, list]]:
+    """Generates a map showing the optimal rebalancing route.
+    Returns a tuple of (map_path, visit_order_data) if successful."""
+    rebalancing_data = system.generate_rebalancing_route(min_threshold, max_threshold)
+    if not rebalancing_data:
+        return None
+
+    map_center = [system.stations[0].y, system.stations[0].x]
+    m = folium.Map(location=map_center, zoom_start=13, tiles="CartoDB positron")
+
+    # Get stations that need rebalancing
+    stations_to_visit = {s.id: s for s in rebalancing_data['stations']}
+
+    # Add all stations (non-rebalancing stations in gray)
+    for station in system.stations:
+        if station.id in stations_to_visit:
+            continue  # Skip stations that need rebalancing, we'll add them with numbered markers
+        tooltip = f"<b>{station.neighbourhood}</b><br>Bikes: {station.bikes}/{station.capacity}"
+        folium.CircleMarker(
+            location=[station.y, station.x],
+            radius=8,
+            color='black',
+            weight=1,
+            fill=True,
+            fill_color='gray',
+            fill_opacity=0.5,
+            tooltip=tooltip
+        ).add_to(m)
+
+    # Add rebalancing route
+    route = rebalancing_data['route']
+    visit_order = []
+    if 'routes' in route and route['routes']:
+        route_geometry = route['routes'][0]['geometry']
+        decoded_route = convert.decode_polyline(route_geometry)
+        
+        # Create route line
+        folium.PolyLine(
+            locations=[[coord[1], coord[0]] for coord in decoded_route['coordinates']],
+            color='red',
+            weight=4,
+            opacity=0.8,
+            tooltip="Rebalancing Route"
+        ).add_to(m)
+
+        # Create a table of stations to visit
+        count = 0
+        for step in route['routes'][0]['steps']:
+            if step['type'] == 'job':
+                count += 1
+                station = next((s for s in rebalancing_data['stations'] if s.id == step['id']), None)
+                if station:
+                    visit_order.append({
+                        'Order': count,
+                        'Station': station.neighbourhood,
+                        'Current Bikes': station.bikes,
+                        'Capacity': station.capacity,
+                        'Fill Ratio': f"{(station.bikes / station.capacity) * 100:.1f}%",
+                        'Distance': f"{step['distance'] / 1000:.2f}km"
+                    })
+                    
+                    # Add numbered marker for this station
+                    folium.CircleMarker(
+                        location=[station.y, station.x],
+                        radius=12,
+                        color='red',
+                        weight=2,
+                        fill=True,
+                        fill_color='red',
+                        fill_opacity=0.9,
+                        tooltip=(
+                            f"Stop {count}: {station.neighbourhood}<br>"
+                            f"Distance: {step['distance'] / 1000:.2f}km"
+                        )
+                    ).add_to(m)
+                    
+                    # Add number label
+                    folium.DivIcon(
+                        html=f'<div style="font-size: 12pt; color: white; font-weight: bold;">{count}</div>',
+                        icon_size=(20, 20),
+                        icon_anchor=(10, 10)
+                    ).add_to(folium.Popup().add_to(
+                        folium.CircleMarker(
+                            location=[station.y, station.x],
+                            radius=0,
+                            popup=folium.Popup(html=f'<div style="font-size: 12pt; color: white; font-weight: bold;">{count}</div>', max_width=20),
+                            icon=folium.DivIcon(
+                                html=f'<div style="font-size: 12pt; color: white; font-weight: bold;">{count}</div>',
+                                icon_size=(20, 20),
+                                icon_anchor=(10, 10)
+                            )
+                        ).add_to(m)
+                    ))
+
+    # Add legend
+    m.get_root().html.add_child(folium.Element(STATION_LEGEND_HTML))
+    
+    # Save to a temporary file
+    output_path = config.GENERATED_DIR / 'rebalancing_route.html'
+    m.save(str(output_path))
+    return str(output_path), visit_order

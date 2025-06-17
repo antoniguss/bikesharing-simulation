@@ -24,7 +24,7 @@ The results provide evidence for:
 
 The simulation is built in Python. To calculate travel routes, we use the **[OSMnx][2]** library to download the bike-friendly street network from **[OpenStreetMap][1]**. This network is saved locally so it loads quickly on future runs. Before the simulation starts, the system calculates the fastest cycling route between every pair of stations using **[NetworkX][3]**. This pre-calculation makes the simulation run much faster.
 
-### User agents
+### User agent
 
 Users in our simulation are managed by **[SimPy][4]**, a library for running event-based simulations. New users are created over time based on realistic patterns, like traveling from home to a shop or from a school back home. These start and end points are real locations taken from our map data.
 

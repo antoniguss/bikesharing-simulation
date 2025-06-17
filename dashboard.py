@@ -204,70 +204,52 @@ else:
                 display_html_file(config.POI_MAP_PATH)
 
         with tab5:
-            # Rebalancing Analysis tab
-            st.subheader("Bike Rebalancing Analysis")
+            # Rebalancing tab
+            st.subheader("Bike Rebalancing")
             
-            col_reb1, col_reb2 = st.columns([1, 2])
-            with col_reb1:
-                st.subheader("Rebalancing Parameters")
-                current_hour = st.selectbox(
-                    "Select Hour",
-                    options=list(range(24)),
-                    format_func=lambda x: f"{x:02d}:00"
-                )
-                min_bikes = st.slider(
-                    "Minimum Bike Percentage",
-                    min_value=0.0,
-                    max_value=0.5,
-                    value=0.3,
-                    step=0.1,
-                    help="Stations below this percentage will be considered for rebalancing"
-                )
-                max_bikes = st.slider(
-                    "Maximum Bike Percentage",
-                    min_value=0.5,
-                    max_value=1.0,
-                    value=0.8,
-                    step=0.1,
-                    help="Stations above this percentage will be considered for rebalancing"
-                )
-                
-                if st.button("Calculate Rebalancing Route", type="primary"):
-                    with st.spinner("Calculating optimal rebalancing route..."):
-                        route_data = bike_system.get_rebalancing_route(current_hour, min_bikes, max_bikes)
-                        if route_data and route_data.get("route_geometry"):
-                            st.success("Route calculated successfully!")
-                            st.session_state.rebalancing_route = route_data
-                            st.session_state.rebalancing_stations = route_data.get("ordered_stations", [])
-                            visualizations.create_rebalancing_route_map(bike_system, 
-                                                                        route_data['route_geometry'], 
-                                                                        st.session_state.rebalancing_stations,
-                                                                        min_bikes, max_bikes)
+            # Threshold slider
+            min_threshold, max_threshold = st.slider(
+                "Station Fill Ratio Thresholds",
+                min_value=0.0,
+                max_value=1.0,
+                value=(0.3, 0.7),
+                step=0.05,
+                help="Stations with fill ratio below min or above max will be included in rebalancing"
+            )
+
+            # Show stations needing rebalancing
+            stations_to_rebalance = bike_system.get_stations_needing_rebalancing(min_threshold, max_threshold)
+            if stations_to_rebalance:
+                st.write(f"Found {len(stations_to_rebalance)} stations needing rebalancing:")
+                rebalance_data = [
+                    {
+                        "Station": s.neighbourhood,
+                        "Current Bikes": s.bikes,
+                        "Capacity": s.capacity,
+                        "Fill Ratio": f"{(s.bikes / s.capacity) * 100:.1f}%"
+                    }
+                    for s in stations_to_rebalance
+                ]
+                st.dataframe(pd.DataFrame(rebalance_data), use_container_width=True)
+
+                if st.button("Generate Rebalancing Route"):
+                    with st.spinner("Generating optimal rebalancing route..."):
+                        result = visualizations.create_rebalancing_route_map(
+                            bike_system, min_threshold, max_threshold
+                        )
+                        if result:
+                            route_path, visit_order = result
+                            st.success("Route generated successfully!")
+                            display_html_file(Path(route_path))
+                            
+                            # Display the visit order table
+                            if visit_order:
+                                st.subheader("Visit Order")
+                                st.dataframe(pd.DataFrame(visit_order), use_container_width=True)
                         else:
-                            st.warning("No stations need rebalancing with current parameters.")
-            
-            with col_reb2:
-                st.subheader("Rebalancing Route")
-                if hasattr(st.session_state, 'rebalancing_route') and st.session_state.rebalancing_route:
-                    display_html_file(config.REBALANCING_ROUTE_MAP_PATH)
-                    
-                    if st.session_state.rebalancing_stations:
-                        st.subheader("Stations to Visit")
-                        station_data = []
-                        for i, station in enumerate(st.session_state.rebalancing_stations, 1):
-                            fill_ratio = station.bikes / station.capacity
-                            status = "Low bikes" if fill_ratio < min_bikes else "High bikes"
-                            station_data.append({
-                                "Order": i,
-                                "Station": station.neighbourhood,
-                                "Current Bikes": station.bikes,
-                                "Capacity": station.capacity,
-                                "Fill Ratio": f"{fill_ratio:.1%}",
-                                "Status": status
-                            })
-                        st.dataframe(pd.DataFrame(station_data), use_container_width=True)
-                else:
-                    st.info("Configure parameters and calculate route to see rebalancing plan.")
+                            st.error("Failed to generate rebalancing route. Check if OpenRouteService is available.")
+            else:
+                st.info("No stations need rebalancing with current thresholds.")
 
         # Console log at the bottom
         with st.expander("View Console Log"):
