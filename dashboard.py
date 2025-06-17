@@ -38,7 +38,7 @@ with st.sidebar:
 
     duration_hours = st.slider(
         "Simulation Duration (hours)",
-        min_value=1, max_value=48, value=config.SIMULATION_DURATION // 60, step=1
+        min_value=1, max_value=24, value=config.SIMULATION_DURATION // 60, step=1
     )
     start_time_hours = st.slider(
         "Start Time (24-hour format)",
