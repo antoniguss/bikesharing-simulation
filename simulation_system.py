@@ -10,6 +10,7 @@ import networkx as nx
 from typing import Dict, Tuple, Optional, List
 import streamlit as st
 
+import config
 from data_models import Station, User
 from utils import (
     POIDatabase, WeightManager, haversine_distance, get_osmnx_graph,
@@ -59,14 +60,34 @@ class BikeShareSystem:
             "total_walking_distance": 0.0, "total_cycling_distance": 0.0
         }
         self.trip_log: List[Dict] = []
+        self.station_state_log: List[Dict] = []
         self.station_usage: Dict[int, int] = {s.id: 0 for s in self.stations}
         self.station_failures: Dict[int, int] = {s.id: 0 for s in self.stations}
         self.route_usage: Dict[Tuple[int, int], int] = {key: 0 for key in self.station_routes}
         self.hourly_bike_counts: Dict[int, Dict[int, int]] = {}
         self.hourly_failures: Dict[int, int] = {h: 0 for h in range(24)}  # Track failures by hour
         
+        self._log_initial_station_states()
+
         status_text.empty()
         progress_bar.empty()
+
+    def _log_initial_station_states(self):
+        """Logs the starting bike count of all stations for live animation."""
+        for station in self.stations:
+            self.station_state_log.append({
+                'time': config.SIMULATION_START_TIME,
+                'station_id': station.id,
+                'bikes': station.bikes
+            })
+
+    def log_station_state(self, time: float, station_id: int, bikes: int):
+        """Records a change in a station's bike count."""
+        self.station_state_log.append({
+            'time': time,
+            'station_id': station_id,
+            'bikes': bikes
+        })
 
     def _load_stations(self) -> List[Station]:
         """Loads station data from the GeoJSON file."""

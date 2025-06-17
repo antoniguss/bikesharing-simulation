@@ -34,16 +34,13 @@ def handle_user_trip(env: Environment, bike_system: BikeShareSystem, user: User)
     cycle_dist, cycle_time, route_geometry = bike_system.get_cycling_info(origin_station.id, dest_station.id)
 
     # 3. Simulate the journey process
-    # The `take_bike` and `return_bike` methods should succeed here because the `find_nearest...`
-    # functions already filtered for availability. This is for correctness and future-proofing.
-    
-    # Time just before starting the journey (after all checks)
     journey_start_time = env.now
     
     if not origin_station.take_bike():
         bike_system.stats["failed_trips"] += 1
         bike_system.station_failures[origin_station.id] += 1
         return
+    bike_system.log_station_state(env.now, origin_station.id, origin_station.bikes)
 
     yield env.timeout(walk_to_time)
     cycle_start_time = env.now
@@ -55,9 +52,12 @@ def handle_user_trip(env: Environment, bike_system: BikeShareSystem, user: User)
         # This case implies the station filled up. The trip fails at the last step.
         # We roll back the bike take to maintain bike count integrity in the simulation.
         origin_station.return_bike()
+        # Log the corrected state of the origin station
+        bike_system.log_station_state(env.now, origin_station.id, origin_station.bikes)
         bike_system.stats["failed_trips"] += 1
         bike_system.station_failures[dest_station.id] += 1
         return
+    bike_system.log_station_state(env.now, dest_station.id, dest_station.bikes)
 
     yield env.timeout(walk_from_time)
     trip_end_time = env.now
