@@ -26,7 +26,7 @@ The simulation is built in Python. To calculate travel routes, we use the **[OSM
 
 ### User agent
 
-Users in our simulation are managed by **[SimPy][4]**, a library for running event-based simulations. New users are created over time based on realistic patterns, like traveling from home to a shop or from a school back home. These start and end points are real locations taken from our map data. Their behaviour is based on the flowchart model from the research paper **"A simulation model for public bike-sharing systems"[9]**.
+Users in our simulation are managed by **[SimPy][4]**, a library for running event-based simulations. New users are created over time based on realistic patterns, like traveling from home to a shop or from a school back home. These start and end points are real locations taken from our map data.
 
 A user's journey follows these steps:
 
@@ -51,7 +51,7 @@ The simulation includes a **[Streamlit][8]**-based dashboard that provides:
   - Route usage heatmaps
   - POI distribution
   - Console logs
-  - Rebalancing route optimization with adjustable thresholds
+  - Rebalancing route optimization
 
 ### Visualization of results
 
@@ -62,12 +62,11 @@ The system generates several types of visualizations:
    - Hourly trip animations
    - Station availability over time
    - POI distribution
-   - Optimized rebalancing routes with numbered stops and visit order
+   - Optimized rebalancing routes
 
 2. Static visualizations using **[Matplotlib][6]** and **[Contextily][7]**:
    - Route usage heatmaps
    - Hourly station activity heatmaps
-   - Failed trips by hour
 
 ### Statistics and Analysis
 
@@ -78,66 +77,11 @@ The simulation tracks and analyzes:
 - Route popularity
 - Hourly bike availability per station
 - Optimal rebalancing routes based on station fill levels
-- Failed trips by hour of day
-- Station fill ratios and rebalancing needs
-
-### Route Optimization
-
-The system uses **[OpenRouteService][10]** for:
-- Accurate cycling route calculations
-- Travel time and distance matrices
-- Vehicle routing optimization for bike rebalancing
-- Interactive visualization of optimal rebalancing routes
-
-### Libraries Used
-
-The simulation leverages several powerful Python libraries:
-
-- **[OpenRouteService-py][10]**: A Python client for the OpenRouteService API, providing:
-  - Route optimization for bike rebalancing
-  - Distance and duration matrices
-  - Polyline decoding for route visualization
-  - Support for multiple transport profiles
-
-- **[Folium][5]**: Interactive map visualization library that:
-  - Creates interactive HTML maps with Leaflet.js
-  - Supports custom markers, popups, and tooltips
-  - Enables time-based animations with TimestampedGeoJson
-  - Provides layer controls for toggling different map elements
-
-- **[SimPy][4]**: Discrete event simulation framework for:
-  - Managing concurrent user journeys
-  - Simulating time-based events
-  - Handling resource allocation (bikes and docks)
-  - Coordinating complex system interactions
-
-- **[OSMnx][2]**: Street network analysis and visualization:
-  - Downloads and processes OpenStreetMap data
-  - Calculates optimal cycling routes
-  - Provides network analysis capabilities
-  - Caches network data for performance
-
-- **[NetworkX][3]**: Graph theory and network analysis:
-  - Computes shortest paths between stations
-  - Analyzes network connectivity
-  - Optimizes route calculations
-  - Integrates with OSMnx for route planning
-
-- **[Streamlit][8]**: Web application framework for:
-  - Interactive parameter configuration
-  - Real-time data visualization
-  - Dynamic dashboard updates
-  - User-friendly interface
-
-- **[Matplotlib][6]** & **[Contextily][7]**: Static visualization tools for:
-  - Creating heatmaps and statistical plots
-  - Adding basemaps to visualizations
-  - Generating publication-quality figures
-  - Analyzing spatial patterns
 
 ### Data Sources & Attribution
 
 - Neighborhood boundaries and geographic data: [Eindhoven Open Data](https://data.eindhoven.nl/pages/home/)
+- User behavior model and trip generation: [9]
 
 - [1] https://www.openstreetmap.org/ "OpenStreetMap Homepage"
 - [2] https://osmnx.readthedocs.io/ "OSMnx Documentation"
@@ -147,5 +91,4 @@ The simulation leverages several powerful Python libraries:
 - [6] https://matplotlib.org/ "Matplotlib Homepage"
 - [7] https://contextily.readthedocs.io/ "Contextily Documentation"
 - [8] https://streamlit.io/ "Streamlit Homepage"
-- [9] https://www.sciencedirect.com/science/article/pii/S2352146518302412 "Paper on behaviour of user agents in a bikesharing system"
-- [10] https://openrouteservice.org/ "OpenRouteService Homepage"
+- [9] https://www.sciencedirect.com/science/article/pii/S2352146518302412
