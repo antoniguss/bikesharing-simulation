@@ -36,13 +36,20 @@ def handle_user_trip(env: Environment, bike_system: BikeShareSystem, user: User)
     # 3. Simulate the journey process
     # The `take_bike` and `return_bike` methods should succeed here because the `find_nearest...`
     # functions already filtered for availability. This is for correctness and future-proofing.
+    
+    # Time just before starting the journey (after all checks)
+    journey_start_time = env.now
+    
     if not origin_station.take_bike():
         bike_system.stats["failed_trips"] += 1
         bike_system.station_failures[origin_station.id] += 1
         return
 
     yield env.timeout(walk_to_time)
+    cycle_start_time = env.now
+    
     yield env.timeout(cycle_time)
+    walk_from_start_time = env.now
     
     if not dest_station.return_bike():
         # This case implies the station filled up. The trip fails at the last step.
@@ -53,6 +60,7 @@ def handle_user_trip(env: Environment, bike_system: BikeShareSystem, user: User)
         return
 
     yield env.timeout(walk_from_time)
+    trip_end_time = env.now
 
     # 4. Log the successful trip
     bike_system.stats["successful_trips"] += 1
@@ -68,8 +76,14 @@ def handle_user_trip(env: Environment, bike_system: BikeShareSystem, user: User)
         'user_destination': user.destination,
         'origin_station': (origin_station.x, origin_station.y),
         'dest_station': (dest_station.x, dest_station.y),
-        'start_time': env.now, # Used for hourly grouping of animation
-        'route_geometry': route_geometry
+        'route_geometry': route_geometry,
+        # Correctly use journey_start_time for hourly grouping
+        'start_time': journey_start_time,
+        # Add detailed timings for real-time animation
+        'walk_to_start_time': journey_start_time,
+        'cycle_start_time': cycle_start_time,
+        'walk_from_start_time': walk_from_start_time,
+        'trip_end_time': trip_end_time
     })
 
 def user_generator(env: Environment, bike_system: BikeShareSystem):

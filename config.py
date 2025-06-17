@@ -31,6 +31,7 @@ STATION_ROUTES_META_PATH = CACHE_DIR / 'station_routes_meta.json'
 # Generated Output
 CONSOLE_OUTPUT_PATH = GENERATED_DIR / 'console_output.txt'
 HOURLY_TRIP_ANIMATION_PATH = GENERATED_DIR / 'hourly_trip_animation.html'
+REALTIME_TRIP_ANIMATION_PATH = GENERATED_DIR / 'realtime_trip_animation.html'
 STATION_AVAILABILITY_ANIMATION_PATH = GENERATED_DIR / 'station_availability_animation.html'
 ALL_TRIP_PATHS_MAP_PATH = GENERATED_DIR / 'all_trip_paths.html'
 RESULTS_HEATMAP_PATH = GENERATED_DIR / 'simulation_results_heatmap.png'

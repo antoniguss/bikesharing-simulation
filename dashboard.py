@@ -188,18 +188,22 @@ else:
         with tab4:
             # System Maps tab - Interactive maps and animations
             st.subheader("Interactive Maps")
-            map_tabs = ["Trip Animation", "Station Availability", "POI Distribution"]
-            map_tab1, map_tab2, map_tab3 = st.tabs(map_tabs)
+            map_tabs = ["Real-time Trip Animation", "Hourly Trip Animation", "Station Availability", "POI Distribution"]
+            map_tab1, map_tab2, map_tab3, map_tab4 = st.tabs(map_tabs)
             
             with map_tab1:
+                st.subheader("Real-time Trip Animation")
+                display_html_file(config.REALTIME_TRIP_ANIMATION_PATH)
+
+            with map_tab2:
                 st.subheader("Hourly Trip Animation")
                 display_html_file(config.HOURLY_TRIP_ANIMATION_PATH)
             
-            with map_tab2:
+            with map_tab3:
                 st.subheader("Hourly Station Availability Animation")
                 display_html_file(config.STATION_AVAILABILITY_ANIMATION_PATH)
             
-            with map_tab3:
+            with map_tab4:
                 st.subheader("POI Distribution")
                 display_html_file(config.POI_MAP_PATH)
 

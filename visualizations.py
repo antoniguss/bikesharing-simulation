@@ -47,6 +47,16 @@ STATION_LEGEND_HTML = '''
 </div>
 '''
 
+# Legend for trip path types
+TRIP_LEGEND_HTML = '''
+<div style="position: fixed; bottom: 200px; left: 50px; width: 160px; height: 80px; 
+ border:2px solid grey; z-index:9999; font-size:14px; background-color: white; padding: 5px;">
+ <b>Trip Path Type</b><br>
+ <svg width="20" height="10"><line x1="0" y1="5" x2="20" y2="5" style="stroke:red;stroke-width:3" /></svg> Cycling<br>
+ <svg width="20" height="10"><line x1="0" y1="5" x2="20" y2="5" style="stroke:blue;stroke-width:3;stroke-dasharray: 3 3" /></svg> Walking<br>
+</div>
+'''
+
 def create_poi_distribution_map(system: BikeShareSystem):
     """Generates a Folium map showing all POI types and neighborhood boundaries."""
     if not system.stations: return
@@ -209,6 +219,110 @@ def create_hourly_trip_animation_map(system: BikeShareSystem):
     # Add station status legend
     m.get_root().html.add_child(folium.Element(STATION_LEGEND_HTML))
     m.save(str(config.HOURLY_TRIP_ANIMATION_PATH))
+
+def create_realtime_trip_animation_map(system: BikeShareSystem):
+    """Generates a Folium map with a real-time animation of each trip."""
+    if not system.trip_log: return
+    map_center = [system.stations[0].y, system.stations[0].x]
+    m = folium.Map(location=map_center, zoom_start=13, tiles="CartoDB positron")
+
+    features = []
+    for trip in system.trip_log:
+        try:
+            # Convert simulation minutes to datetime objects
+            walk_to_start = BASE_DATE + timedelta(minutes=trip['walk_to_start_time'])
+            cycle_start = BASE_DATE + timedelta(minutes=trip['cycle_start_time'])
+            walk_from_start = BASE_DATE + timedelta(minutes=trip['walk_from_start_time'])
+            trip_end = BASE_DATE + timedelta(minutes=trip['trip_end_time'])
+        except KeyError:
+            # Skip if a trip log entry is missing the new timing keys
+            continue
+
+        # 1. First walk leg (User Origin -> Origin Station)
+        features.append({
+            'type': 'Feature',
+            'geometry': mapping(LineString([trip['user_origin'], trip['origin_station']])),
+            'properties': {
+                'times': [walk_to_start.isoformat(), cycle_start.isoformat()],
+                'style': {'color': 'blue', 'weight': 3, 'dashArray': '5, 5', 'opacity': 0.8},
+                'popup': 'Walking to station'
+            }
+        })
+
+        # 2. Cycling leg (Origin Station -> Destination Station)
+        cycle_geom = trip.get('route_geometry')
+        if cycle_geom and isinstance(cycle_geom, (LineString, MultiLineString)):
+            all_coords = []
+            if isinstance(cycle_geom, LineString):
+                all_coords.extend(list(cycle_geom.coords))
+            elif isinstance(cycle_geom, MultiLineString):
+                for line in cycle_geom.geoms:
+                    all_coords.extend(list(line.coords))
+            
+            if all_coords:
+                num_points = len(all_coords)
+                cycle_duration_seconds = (walk_from_start - cycle_start).total_seconds()
+                
+                timestamps = []
+                if num_points > 1 and cycle_duration_seconds > 0:
+                    time_per_segment = cycle_duration_seconds / (num_points - 1)
+                    timestamps = [(cycle_start + timedelta(seconds=i * time_per_segment)).isoformat() for i in range(num_points)]
+                elif num_points > 0:
+                    timestamps = [cycle_start.isoformat()] * num_points
+                
+                if timestamps:
+                    features.append({
+                        'type': 'Feature',
+                        'geometry': mapping(cycle_geom),
+                        'properties': {
+                            'times': timestamps,
+                            'style': {'color': 'red', 'weight': 4, 'opacity': 0.7},
+                            'popup': 'Cycling'
+                        }
+                    })
+
+        # 3. Second walk leg (Destination Station -> User Destination)
+        features.append({
+            'type': 'Feature',
+            'geometry': mapping(LineString([trip['dest_station'], trip['user_destination']])),
+            'properties': {
+                'times': [walk_from_start.isoformat(), trip_end.isoformat()],
+                'style': {'color': 'blue', 'weight': 3, 'dashArray': '5, 5', 'opacity': 0.8},
+                'popup': 'Walking to destination'
+            }
+        })
+    
+    # Add station markers (static, showing final state) for context
+    for station in system.stations:
+        color = get_station_color(station.bikes, station.capacity)
+        tooltip = f"<b>{station.neighbourhood}</b><br>Final State: {station.bikes}/{station.capacity} bikes"
+        folium.CircleMarker(
+            location=[station.y, station.x],
+            radius=8,
+            color='black',
+            weight=1,
+            fill=True,
+            fill_color=color,
+            fill_opacity=0.9,
+            tooltip=tooltip
+        ).add_to(m)
+
+    folium.plugins.TimestampedGeoJson(
+        {'type': 'FeatureCollection', 'features': features},
+        period='PT1M', # Update every minute
+        add_last_point=False,
+        auto_play=False,
+        loop=False,
+        max_speed=60, # 60x real time, so 1 minute of sim time takes 1 second
+        loop_button=True,
+        duration='PT1M', # Each segment lasts 1 minute in the animation
+        transition_time=100, # ms
+        time_slider_drag_update=True
+    ).add_to(m)
+
+    m.get_root().html.add_child(folium.Element(STATION_LEGEND_HTML))
+    m.get_root().html.add_child(folium.Element(TRIP_LEGEND_HTML))
+    m.save(str(config.REALTIME_TRIP_ANIMATION_PATH))
 
 
 def create_station_availability_animation_map(system: BikeShareSystem):

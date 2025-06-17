@@ -76,6 +76,7 @@ def run_simulation() -> BikeShareSystem:
         visualizations.create_all_trip_paths_map(bike_system)
         visualizations.create_results_heatmap(bike_system)
         visualizations.create_hourly_trip_animation_map(bike_system)
+        visualizations.create_realtime_trip_animation_map(bike_system)
         visualizations.create_hourly_station_heatmap(bike_system)
     else:
         print("No successful trips to visualize, skipping trip-based maps.")
