@@ -115,7 +115,16 @@ else:
             col_overview1, col_overview2 = st.columns(2)
             with col_overview1:
                 st.subheader("Failed Trips by Hour")
-                display_image_file(config.HOURLY_FAILURES_PATH)
+                hours, failures = visualizations.get_hourly_failures_data(bike_system)
+                if hours and failures:
+                    st.bar_chart(
+                        pd.DataFrame({
+                            'Hour': hours,
+                            'Failed Trips': failures
+                        }).set_index('Hour')
+                    )
+                else:
+                    st.info("No failure data available.")
             with col_overview2:
                 st.subheader("Hourly Station Activity")
                 display_image_file(config.HOURLY_STATION_HEATMAP_PATH)

@@ -82,7 +82,6 @@ def run_simulation() -> BikeShareSystem:
         print("No successful trips to visualize, skipping trip-based maps.")
     
     visualizations.create_station_availability_animation_map(bike_system)
-    visualizations.create_hourly_failures_plot(bike_system)
     print("Visualizations created successfully.")
 
     with open(config.CONSOLE_OUTPUT_PATH, 'w') as f:

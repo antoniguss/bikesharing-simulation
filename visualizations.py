@@ -479,6 +479,20 @@ def create_hourly_failures_plot(system: BikeShareSystem):
     plt.savefig(str(config.HOURLY_FAILURES_PATH), dpi=150, bbox_inches='tight')
     plt.close(fig)
 
+def get_hourly_failures_data(system: BikeShareSystem) -> tuple[list, list]:
+    """Returns hourly failures data for Streamlit charts.
+    
+    Returns:
+        tuple: (hours, failures) where hours is a list of hour labels and failures is a list of failure counts
+    """
+    if not system.hourly_failures:
+        return [], []
+    
+    hours = [f"{h:02d}:00" for h in range(24)]
+    failures = [system.hourly_failures[h] for h in range(24)]
+    
+    return hours, failures
+
 def create_rebalancing_route_map(system: BikeShareSystem, min_threshold: float = 0.3, max_threshold: float = 0.7) -> Optional[tuple[str, list]]:
     """Generates a map showing the optimal rebalancing route.
     Returns a tuple of (map_path, visit_order_data) if successful."""
