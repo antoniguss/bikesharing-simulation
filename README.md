@@ -1,3 +1,35 @@
+# How to Run the App
+
+1. **(Optional but recommended) Create a virtual environment:**
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate  # On Windows use: venv\Scripts\activate
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Set up API keys:**
+   - Create a file at `.streamlit/secrets.toml` in the project root.
+   - Add your OpenRouteService API key:
+     ```toml
+     ORS_API_KEY = "your_openrouteservice_api_key_here"
+     ```
+
+4. **Run the app locally:**
+   ```bash
+   streamlit run dashboard.py
+   ```
+
+5. **Access the dashboard:**
+   - Open your browser and go to [http://localhost:8501](http://localhost:8501)
+
+---
+
+> The app is also hosted online at: [https://bikesharing-simulation.streamlit.app/](https://bikesharing-simulation.streamlit.app/)
+
 # Simulation overview
 
 We're creating a digital model of a bike-sharing system for specific neighbourhoods in Eindhoven.
